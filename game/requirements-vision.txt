@@ -1,0 +1,8 @@
+# Optional: only needed for the camera mode (play_camera.py / vision.py). The game itself
+# (game_logic.py, play_keyboard.py, simulate.py, bot.py) needs only opencv-python and numpy.
+#
+# Tested with Python 3.14 (same note as hand_detection/requirements.txt): mediapipe 1.x has no
+# mp.solutions any more - hand_adapter.py uses the mediapipe.tasks Task API instead.
+mediapipe==1.0.1
+ultralytics
+lap

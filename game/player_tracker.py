@@ -38,6 +38,39 @@ CAMERA_FOV_DEG = 70.0      # horizontal field of view of a usual laptop webcam
 
 
 # ------------------------------------------------------------------ identities (no YOLO needed: tested on its own)
+APPEARANCE_WEIGHT = 0.5     # how much a clothing-colour mismatch adds to the position cost, when enabled
+
+
+def appearance_distance(h1, h2):
+    """Bhattacharyya distance between two colour histograms (0 = similar, up to ~1 = very different).
+    Lazy cv2 import: IdentityManager stays importable and testable without OpenCV when this is unused."""
+    if h1 is None or h2 is None:
+        return 0.0
+    import cv2
+    return float(cv2.compareHist(h1.astype("float32"), h2.astype("float32"), cv2.HISTCMP_BHATTACHARYYA))
+
+
+def appearance_descriptor(frame, box):
+    """Normalized HSV histogram of the upper-body/clothing region of `box` (x1, y1, x2, y2) in `frame`.
+    Ported from the group's re-ID script. Lazy cv2 import, same reason as above."""
+    import cv2
+    import numpy as np
+    x1, y1, x2, y2 = (int(round(v)) for v in box)
+    h, w = frame.shape[:2]
+    x1, x2 = max(0, x1), min(w, x2)
+    y1, y2 = max(0, y1), min(h, y2)
+    bw, bh = x2 - x1, y2 - y1
+    if bw < 8 or bh < 12:
+        return None
+    crop = frame[y1 + int(0.20 * bh):y1 + int(0.72 * bh), x1 + int(0.15 * bw):x1 + int(0.85 * bw)]
+    if crop.size == 0:
+        return None
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    hist = cv2.calcHist([hsv], [0, 1], None, [24, 16], [0, 180, 0, 256])
+    cv2.normalize(hist, hist, alpha=1.0, norm_type=cv2.NORM_L1)
+    return hist
+
+
 class IdentityManager:
     """Tracker ids -> PLAYER 1 / PLAYER 2.
 
@@ -46,13 +79,17 @@ class IdentityManager:
       player was (or that player has been away longer than `forget_s`: re-entry anywhere)
     - the very first time, players are given by side: left = PLAYER 1, right = PLAYER 2
     - never more than n players: anyone else is ignored
+    - `appearance=True` (default off, from the group's re-ID script) also matches on a clothing-colour
+      histogram passed into `update()`; with none passed, behaviour is identical to `appearance=False`.
     """
 
-    def __init__(self, n=2, width=1280, near=0.35, forget_s=3.0):
+    def __init__(self, n=2, width=1280, near=0.35, forget_s=3.0, appearance=False):
         self.w, self.near, self.forget = float(width), near, forget_s * 1000
+        self.appearance = appearance
         self.slots = {p: {"tid": None, "c": None, "seen": None} for p in range(1, n + 1)}
+        self.hist = {p: None for p in range(1, n + 1)}
 
-    def _cost(self, p, c, t):
+    def _cost(self, p, c, t, hist=None):
         s = self.slots[p]
         if s["c"] is None:                                      # never seen: left player -> 1, right -> 2
             side = c[0] / self.w
@@ -60,10 +97,14 @@ class IdentityManager:
         d = math.dist(c, s["c"]) / self.w
         if t - s["seen"] < self.forget and d > self.near:       # seen recently, far away: not this player
             return math.inf
+        if self.appearance and hist is not None and self.hist[p] is not None:
+            d += APPEARANCE_WEIGHT * appearance_distance(self.hist[p], hist)
         return d
 
-    def update(self, dets, t_ms):
-        """dets: [(tracker_id, (x, y))] of this frame. Returns {tracker_id: player} (ignored people are left out)."""
+    def update(self, dets, t_ms, appearances=None):
+        """dets: [(tracker_id, (x, y))] of this frame. `appearances`: optional {tracker_id: histogram},
+        only used when `appearance=True`. Returns {tracker_id: player} (ignored people are left out)."""
+        hists = appearances or {}
         out = {tid: p for tid, _ in dets for p, s in self.slots.items() if s["tid"] == tid}
         new = [(tid, c) for tid, c in dets if tid not in out]
         free = [p for p in self.slots if p not in out.values()]
@@ -71,7 +112,7 @@ class IdentityManager:
         for k in range(min(len(new), len(free)), 0, -1):      # as many assignments as possible, then cheapest
             for subset in itertools.combinations(new, k):
                 for perm in itertools.permutations(free, k):
-                    cost = sum(self._cost(p, c, t_ms) for (_, c), p in zip(subset, perm))
+                    cost = sum(self._cost(p, c, t_ms, hists.get(tid)) for (tid, c), p in zip(subset, perm))
                     if cost < math.inf and (best is None or cost < best[0]):
                         best = (cost, list(zip(subset, perm)))
             if best:
@@ -81,6 +122,15 @@ class IdentityManager:
         centres = dict(dets)
         for tid, p in out.items():
             self.slots[p] = {"tid": tid, "c": centres[tid], "seen": t_ms}
+            if self.appearance and hists.get(tid) is not None:
+                old = self.hist[p]
+                if old is None:
+                    self.hist[p] = hists[tid].copy()
+                else:
+                    import cv2
+                    blended = 0.8 * old + 0.2 * hists[tid]
+                    cv2.normalize(blended, blended, alpha=1.0, norm_type=cv2.NORM_L1)
+                    self.hist[p] = blended
         return out
 
 
@@ -95,6 +145,7 @@ class Player:
     distance_m: float | None = None      # rough distance to the camera (shoulder width), T3-08
     track_id: int | None = None
     seen_ms: float | None = None         # time of the last detection
+    eyes: tuple | None = None            # ((x, y), (x, y)) image-left / image-right eye, for the AR overlay
 
     def raised_hand(self):
         """The wrist that is highest in the picture: the casting hand, if the hand module does not say otherwise."""
@@ -107,13 +158,13 @@ def _ema(old, new, a):
 
 class PlayerTracker:
     def __init__(self, model=None, imgsz=480, every=2, device=None, conf=0.35, kp_conf=0.35, min_height=0.25,
-                 smooth=0.6, keep_ms=300, tracker=None):
+                 smooth=0.6, keep_ms=300, tracker=None, appearance=False):
         from ultralytics import YOLO                            # here, so the rest can be used without it
         local = HERE / "models" / "yolov8n-pose.pt"                 # put the model next to the code for the ZIP
         self.model = YOLO(str(model) if model else str(local) if local.exists() else "yolov8n-pose.pt")
         self.tracker = str(tracker or HERE / "bytetrack_players.yaml")
         self.imgsz, self.every, self.device, self.conf, self.kp_conf = imgsz, every, device, conf, kp_conf
-        self.min_height, self.smooth, self.keep_ms = min_height, smooth, keep_ms
+        self.min_height, self.smooth, self.keep_ms, self.appearance = min_height, smooth, keep_ms, appearance
         self.players = {1: Player(), 2: Player()}
         self.ids, self.n, self.ms = None, 0, 0.0
 
@@ -121,19 +172,19 @@ class PlayerTracker:
         """Run (every `every` frames) and return {1: Player, 2: Player}. `frame` as the game shows it (mirrored)."""
         h, w = frame.shape[:2]
         if self.ids is None:
-            self.ids = IdentityManager(2, w)
+            self.ids = IdentityManager(2, w, appearance=self.appearance)
         self.n += 1
         if (self.n - 1) % self.every == 0:
             t0 = time.perf_counter()
             r = self.model.track(frame, imgsz=self.imgsz, persist=True, tracker=self.tracker, conf=self.conf,
                                  device=self.device, verbose=False)[0]
             self.ms = (time.perf_counter() - t0) * 1000
-            self._read(r, w, h, t_ms)
+            self._read(r, w, h, t_ms, frame)
         for p in self.players.values():
             p.present = p.seen_ms is not None and t_ms - p.seen_ms <= self.keep_ms
         return self.players
 
-    def _read(self, r, w, h, t_ms):
+    def _read(self, r, w, h, t_ms, frame):
         if r.boxes is None or r.boxes.id is None or r.keypoints is None or not len(r.boxes):
             return
         boxes = r.boxes.xyxy.cpu().numpy()
@@ -142,7 +193,9 @@ class PlayerTracker:
         people = [i for i in range(len(boxes)) if boxes[i, 3] - boxes[i, 1] >= self.min_height * h]
         people = sorted(people, key=lambda i: boxes[i, 3] - boxes[i, 1], reverse=True)[:2]   # the 2 biggest
         dets = [(tids[i], ((boxes[i, 0] + boxes[i, 2]) / 2, (boxes[i, 1] + boxes[i, 3]) / 2)) for i in people]
-        mapping = self.ids.update(dets, t_ms)
+        appearances = {tids[i]: appearance_descriptor(frame, boxes[i]) for i in people} \
+            if self.appearance else None
+        mapping = self.ids.update(dets, t_ms, appearances)
         f = (w / 2) / math.tan(math.radians(CAMERA_FOV_DEG / 2))
         for i in people:
             pid = mapping.get(tids[i])
@@ -158,6 +211,11 @@ class PlayerTracker:
             p.head = _ema(p.head, tuple(map(float, head)), a)
             p.wrists = [tuple(map(float, pts[j])) for j in (L_WR, R_WR) if ok[j]]
             p.box = tuple(map(float, boxes[i]))
+            if ok[L_EYE] and ok[R_EYE]:
+                e1, e2 = tuple(map(float, pts[L_EYE])), tuple(map(float, pts[R_EYE]))
+                p.eyes = (e1, e2) if e1[0] <= e2[0] else (e2, e1)    # (image-left point, image-right point)
+            else:
+                p.eyes = None
             if ok[L_SH] and ok[R_SH]:
                 p.shoulder_px = float(np.linalg.norm(pts[L_SH] - pts[R_SH]))
                 p.distance_m = f * SHOULDER_M / max(p.shoulder_px, 1.0)

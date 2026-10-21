@@ -14,10 +14,21 @@ import numpy as np
 
 import hud as H
 from game_logic import FIGHT, LOBBY, MATCH_OVER, PAPER, Config, Game, PlayerInput
+from hand_adapter import assign as hand_assign
 from play_keyboard import VirtualPlayers
+from player_tracker import Player
 from simulate import SCRIPT
+from sunglasses_overlay import SunglassesOverlay
 
 HERE = Path(__file__).resolve().parent
+
+# Vision stages that need YOLO / MediaPipe (not installed by default) are not timed here: only the
+# post-processing that runs regardless, on stand-in players/hands of the right shape (T5's "mock mode").
+MOCK_PLAYERS = {
+    1: Player(present=True, wrists=[(400.0, 390.0)], head=(260.0, 300.0), eyes=((245.0, 290.0), (275.0, 290.0))),
+    2: Player(present=True, wrists=[(880.0, 390.0)], head=(1020.0, 300.0), eyes=((1005.0, 290.0), (1035.0, 290.0))),
+}
+MOCK_HANDS = [((400.0, 390.0), "FIRE"), ((880.0, 390.0), "WATER")]
 
 
 def main():
@@ -27,6 +38,7 @@ def main():
     cam = cv2.resize(cv2.imread(str(HERE / "assets" / "demo_background.jpg")), (640, 480))
     cfg = Config()
     game, hud, vp = Game([1, 2], cfg, (W, HH)), H.Hud(profile=True), VirtualPlayers(W, HH, cfg.lanes)
+    overlay = SunglassesOverlay()
     times, n_spells, t, end_at = defaultdict(list), [], 0.0, None
 
     while end_at is None or t < end_at:
@@ -57,6 +69,10 @@ def main():
         hud.add(events, t, snap)
         hud.draw(frame, snap, t)
         tick("drawing (hud)")
+        hand_assign(MOCK_HANDS, MOCK_PLAYERS, frame.shape[1])
+        tick("hand assignment")
+        overlay.draw(frame, MOCK_PLAYERS, t)
+        tick("glasses overlay")
         n_spells.append(len(snap["spells"]))
         if any(e["type"] == "phase" and e["phase"] == MATCH_OVER for e in events):
             end_at = t + 3000

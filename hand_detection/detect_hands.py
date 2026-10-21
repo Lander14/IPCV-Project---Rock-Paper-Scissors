@@ -156,4 +156,9 @@ def main():
 
 
 if __name__ == "__main__":
+    import warnings
+    warnings.warn(
+        "detect_hands.py's live hand tracking is superseded by game/hand_adapter.py in the fused camera "
+        "game; this script (and its figures) are kept for the hand_detection write-up. See game/README.md",
+        DeprecationWarning, stacklevel=2)
     main()

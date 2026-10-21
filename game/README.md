@@ -77,6 +77,9 @@ python play_keyboard.py --solo      # single player: you (left) against the comp
 python play_keyboard.py --solo --level hard     # easy | normal | hard
 python simulate.py                  # scripted match on assets/demo_background.jpg -> simulated_game.mp4
 python simulate.py --background clip.mp4   # the same on any picture or video
+python play_camera.py               # T2+T3+AR fused: pose tracking + hand gestures + sunglasses overlay
+python play_camera.py --solo --level hard
+python play_camera.py --no-glasses --every 3 --imgsz 384   # a slower laptop
 ```
 
 Keyboard: **P1** A rock · S paper · D scissors · F shield · G potion · Q / W / E lane ·
@@ -95,6 +98,12 @@ In keyboard mode the players are virtual (thin outlines at fixed places); with t
 | `camera_check.py` | measures how many FPS the webcam really gives in each mode |
 | `test_game_logic.py` | tests (`python test_game_logic.py` or `pytest`) |
 | `assets/demo_background.jpg` | a frame of our own footage, background of the simulation |
+| `vision.py` | the fused camera pipeline: owns `PlayerTracker` + `HandAdapter`, one call each per frame |
+| `hand_adapter.py` | hand gesture classification (ported from `task2_hands.py`) + hand-to-player assignment |
+| `sunglasses_overlay.py` | the sunglasses AR overlay, from pose eye keypoints (ported from `face_tracking_final.py`) |
+| `play_camera.py` | camera version: pose + hand tracking instead of the keyboard, `--solo` against the computer too |
+| `test_vision.py` | tests of the fusion (gesture classifier, hand assignment, call counts, import hygiene) |
+| `assets/sunglasses_picture.jpg`, `sunglasses_picture2.jpg` | P1 / P2 sunglasses sprites (plain JPGs; keyed to RGBA at load) |
 
 ### Single-player mode (`--solo`)
 
@@ -201,6 +210,37 @@ while True:
 - `game.snapshot()["spells"]` gives every spell's lane and position each frame.
 
 ---
+
+## Fusing the group's submitted code: `vision.py`
+
+`play_camera.py` replaces the keyboard with `vision.py`, a facade that is the **only** place that owns a
+model: one `PlayerTracker` (pose, its own `every`-frame cadence) and one `HandAdapter` (hands, every
+frame). Needs `pip install -r requirements-vision.txt` (mediapipe, ultralytics, lap) on top of the base
+`opencv-python` / `numpy` the rest of `game/` uses; `test_vision.py` and the rest of the test suite run
+fine without any of them installed (lazy imports, fakes injected in the tests). Each returns at most once per frame; `vision.process(frame, t_ms)` turns their output into the
+same `PlayerInput` the keyboard and the bot already feed the game, so `game_logic.py`, `hud.py`,
+`play_keyboard.py`, `simulate.py` and `bot.py` did not need to change.
+
+| Group's submitted file (in `code pieces/OneDrive_1_10-21-2026.zip`) | Superseded by | What changed |
+|---|---|---|
+| `two_player_pose_tracking_reid.py` | `player_tracker.py` (`IdentityManager(appearance=True)`) | the appearance/motion/pose cost is now an **additive, default-off** option on the existing identity matcher, not a second tracker; off by default because it is unvalidated on real footage (see Risks) |
+| `task2_hands.py` | `hand_adapter.py` | kept the finger-state classifier (FIRE/WATER/LIGHTNING) and MediaPipe wiring; dropped its own hold-to-confirm and its placeholder left/right hand assignment, since `game_logic`'s `stable_frames` debounce and the real `PlayerTracker` identities already do both, better |
+| `face_tracking_final.py` | `sunglasses_overlay.py` | kept `make_transparent` (the background-keying for the alpha-less JPGs) and the eye-line affine warp; dropped the separate face-landmark model, Kalman filter and face re-ID, since the pose keypoints `PlayerTracker` already extracts anchor the glasses with no extra inference |
+| `hand_detection/detect_hands.py` (already in the repo) | `hand_adapter.py` | deprecated as live code (`DeprecationWarning` when run directly); the hand_detection write-up and its figures are untouched |
+| `two_player_pose_tracking.py` (already in the repo) | `player_tracker.py` / `vision.py` | deprecated as live code (`DeprecationWarning` on import); nothing in `game/` ever imported it |
+
+**Known risks, not yet resolved by a test:**
+- **MediaPipe on this Python.** This machine runs Python 3.14; MediaPipe wheels have historically lagged
+  new CPython releases. `pip install mediapipe` may simply fail here — check before the demo, on the
+  actual demo laptop's Python.
+- **Real-camera latency is unmeasured.** `benchmark.py`'s new `hand assignment` / `glasses overlay` rows
+  time only the post-processing (no YOLO/MediaPipe installed in this environment); the pose and hand
+  model calls themselves still need a real run on the demo hardware.
+- **Re-ID (`appearance=True`) is unvalidated.** `test_player_tracker.py` passes unchanged with it off (the
+  default); nobody has checked it against real two-player footage yet. Turn it on deliberately, re-run the
+  tests, and watch for regressions before relying on it.
+- **Sunglasses asset licence.** `sunglasses_picture.jpg` / `sunglasses_picture2.jpg` are copied into
+  `game/assets/`; confirm where they came from before this goes into a graded deliverable.
 
 ## To decide as a team
 
