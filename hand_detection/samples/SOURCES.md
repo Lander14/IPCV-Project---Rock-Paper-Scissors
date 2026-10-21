@@ -1,0 +1,20 @@
+# Test photos — sources and licences
+
+All images from Wikimedia Commons, resized to 1024 px. Reuse requires the attribution below.
+
+| File | Tests | Licence | Author | Source |
+|---|---|---|---|---|
+| 01_fist_plain.jpg | one fist, plain background (easy) | CC BY-SA 4.0 | Genusfotografen (Tomas Gunnarsson) / Wikimedia Sverige | [Clenched fist.jpg](https://commons.wikimedia.org/wiki/File:Clenched_fist.jpg) |
+| 02_two_open_palms.jpg | two open palms, close-up | CC BY-SA 4.0 | E.H.M.Plauen | [25.12.2018 Vierfingerfurche, beidseitig.JPG](https://commons.wikimedia.org/wiki/File:25.12.2018_Vierfingerfurche,_beidseitig.JPG) |
+| 03_waving_webcam_like.jpg | one person waving, webcam-like framing | CC BY 4.0 | saetbyeol37 | [160407 박정아의 달빛낙원 오마이걸 아린 03.jpg](https://commons.wikimedia.org/wiki/File:160407_%EB%B0%95%EC%A0%95%EC%95%84%EC%9D%98_%EB%8B%AC%EB%B9%9B%EB%82%99%EC%9B%90_%EC%98%A4%EB%A7%88%EC%9D%B4%EA%B1%B8_%EC%95%84%EB%A6%B0_03.jpg) |
+| 04_arms_raised_stage.jpg | two raised hands, full body, dark stage | CC BY-SA 4.0 | Dani Blanco | [2017ko Bertsolari Txapelketa Nagusia - BEC - Aitor Sarr](https://commons.wikimedia.org/wiki/File:2017ko_Bertsolari_Txapelketa_Nagusia_-_BEC_-_Aitor_Sarriegi_sariketa.jpg) |
+| 05_high_five_two_people.jpg | two people, hands touching (multiplayer) | CC BY 2.0 | 總統府 | [04.08 副總統出席總統府小小發言人活動，並頒發證書及獎品 (33864753016).jpg](https://commons.wikimedia.org/wiki/File:04.08_%E5%89%AF%E7%B8%BD%E7%B5%B1%E5%87%BA%E5%B8%AD%E7%B8%BD%E7%B5%B1%E5%BA%9C%E5%B0%8F%E5%B0%8F%E7%99%BC%E8%A8%80%E4%BA%BA%E6%B4%BB%E5%8B%95%EF%BC%8C%E4%B8%A6%E9%A0%92%E7%99%BC%E8%AD%89%E6%9B%B8%E5%8F%8A%E7%8D%8E%E5%93%81_(33864753016).jpg) |
+| 06_handshake_occlusion.jpg | interlocked hands (occlusion) | CC BY-SA 2.0 | Saeima | [2024.gada 22.februāris - Fotoizstādes "Ukraina. Kara hr](https://commons.wikimedia.org/wiki/File:2024.gada_22.febru%C4%81ris_-_Fotoizst%C4%81des_%22Ukraina._Kara_hronika%22_atkl%C4%81%C5%A1ana_(53545141769).jpg) |
+| 07_gesture_low_light.jpg | gesturing hand, low light | Public domain | U.S. Department of Agriculture | [24th Annual Holocaust Remembrance Program at the Lincol](https://commons.wikimedia.org/wiki/File:24th_Annual_Holocaust_Remembrance_Program_at_the_Lincoln_Theatre_(34291491795).jpg) |
+| 08_hand_holding_object.jpg | hand holding a sign (object occlusion) | CC0 | Cybularny | [16-09-2018 protest against EU Copyright Reform in Warsa](https://commons.wikimedia.org/wiki/File:16-09-2018_protest_against_EU_Copyright_Reform_in_Warsaw,_57.jpg) |
+| 09_two_fists_small.jpg | two small fists in a wide shot | Public domain | Yoichi Okamoto | [Lyndon B. Johnson press conference November 17, 1967 - ](https://commons.wikimedia.org/wiki/File:Lyndon_B._Johnson_press_conference_November_17,_1967_-_LBJ_Museum_C7530-33A.jpg) |
+| 10_raised_hand_bw.jpg | raised hand, black and white photo | Public domain | Walter Albertin (World Telegram &amp; Sun); restored by Adam | [Mrs. Constance B. Motley, first woman Senator, 21st Sen](https://commons.wikimedia.org/wiki/File:Mrs._Constance_B._Motley,_first_woman_Senator,_21st_Senatorial_District,_N.Y.,_raising_hand_in_V_sign.jpg) |
+| 11_overlapping_hands.jpg | one hand on top of another (close-up) | Public domain | Immanuel Giel | [DEKT 2009 (08).jpg](https://commons.wikimedia.org/wiki/File:DEKT_2009_(08).jpg) |
+| 12_crowd_many_hands.jpg | crowd, many hands, clutter | CC BY 2.0 | 總統府 | [08.14 總統主持「總統府暨國安會108年員工家庭日」 (48534187046).jpg](https://commons.wikimedia.org/wiki/File:08.14_%E7%B8%BD%E7%B5%B1%E4%B8%BB%E6%8C%81%E3%80%8C%E7%B8%BD%E7%B5%B1%E5%BA%9C%E6%9A%A8%E5%9C%8B%E5%AE%89%E6%9C%83108%E5%B9%B4%E5%93%A1%E5%B7%A5%E5%AE%B6%E5%BA%AD%E6%97%A5%E3%80%8D_(48534187046).jpg) |
+| 13_negative_squirrel.jpg | NO human hands (false-positive check) | CC BY 2.0 | Peter Trimming from Croydon, England | [Directing the Human Traffic (23406471769).jpg](https://commons.wikimedia.org/wiki/File:Directing_the_Human_Traffic_(23406471769).jpg) |
+| 14_negative_no_hands.jpg | NO hands (false-positive check) | CC BY-SA 2.0 | H. Michael Miley from Schaumburg, USA | [Big Boy Passing (48383120856).jpg](https://commons.wikimedia.org/wiki/File:Big_Boy_Passing_(48383120856).jpg) |

@@ -1,0 +1,2 @@
+# Tested with Python 3.14 (Ubuntu 26.04). MediaPipe 1.x has no mp.solutions: use mediapipe.tasks
+mediapipe==1.0.1
