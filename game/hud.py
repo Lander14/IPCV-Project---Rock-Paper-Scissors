@@ -7,8 +7,8 @@
     hud.draw(frame, snap, t_ms)                 # frame = the webcam image; positions come from the game state
 
 Draws the three lanes between the players, the rock / paper / scissors travelling along them (with a glow),
-shields as barriers in their lane, a ring on each casting hand with the recognised gesture, impacts, HP / mana,
-the countdown and a short text feed of what happened.
+a ring on each casting hand with the recognised gesture, impacts, HP / mana, the countdown and a short
+text feed of what happened.
 """
 import math
 import random
@@ -19,11 +19,10 @@ import cv2
 import numpy as np
 
 from game_logic import (FIGHT, LOBBY, MATCH_OVER, PAPER, PAUSED, POTION, RESUME, ROCK, ROUND_END, ROUND_START,
-                        SCISSORS, SHIELD)
+                        SCISSORS)
 
 PLAYER_COL = {1: (230, 110, 250), 2: (110, 230, 110), 3: (240, 210, 70), 4: (70, 210, 240)}   # BGR: pink, green, ...
-SPELL_COL = {ROCK: (60, 150, 240), PAPER: (255, 255, 255), SCISSORS: (255, 210, 90),
-             SHIELD: (255, 225, 150), POTION: (120, 230, 120)}
+SPELL_COL = {ROCK: (60, 150, 240), PAPER: (255, 255, 255), SCISSORS: (255, 210, 90), POTION: (120, 230, 120)}
 FONT = cv2.FONT_HERSHEY_DUPLEX
 SHOW_MS, FEED_MS = 1300, 3500        # impact texts; messages in the feed
 _ROCK = np.array([1.0, 0.82, 0.95, 0.78, 0.93, 1.0, 0.85, 0.97, 0.8, 0.9])
@@ -91,8 +90,6 @@ def icon(img, action, c, r, t=0.0, d=1):
         draw_paper(img, c, r * 0.9, t)
     elif action == SCISSORS:
         draw_scissors(img, c, r, t, d)
-    elif action == SHIELD:
-        cv2.circle(img, (int(c[0]), int(c[1])), int(r), SPELL_COL[SHIELD], max(2, int(r / 5)), cv2.LINE_AA)
     elif action == POTION:
         x, y = c
         cv2.circle(img, (int(x), int(y + 0.35 * r)), int(0.65 * r), (90, 200, 90), -1, cv2.LINE_AA)
@@ -160,8 +157,6 @@ def sentence(e, n=lambda pid: f"P{pid}"):
     k, a = e["type"], (e.get("action") or "").lower()
     if k == "hit":
         return f"{a.title()} hits {n(e['target'])}: -{e['amount']}"
-    if k == "blocked":
-        return f"{n(e['target'])}'s shield stops the {a}"
     if k == "counter":
         return f"{e['why']}: {n(e['player'])} counters {n(e['target'])}"
     if k == "clash":
@@ -218,14 +213,14 @@ class Hud:
                 self._fx(t_ms, 500, glow=lambda g, u, p=xy: g.circle(
                     p, (30 + 110 * u) * g.sc, (60, 60, 255), max(2, 16 * (1 - u))))
                 self._float(t_ms, xy, f"-{e['amount']}", (80, 80, 255), 1.6, k=stack(("p", e["target"])))
-            elif k in ("blocked", "counter", "clash"):
-                col = SPELL_COL[SHIELD] if k == "blocked" else SPELL_COL[a]
+            elif k in ("counter", "clash"):
+                col = SPELL_COL[a]
                 self._fx(t_ms, 600, glow=lambda g, u, p=xy, col=col: self._burst(g.line, g.sc, p, u, col, 1.4),
                          draw=lambda img, u, p=xy: self._burst(
                              lambda a, b, c, t: cv2.line(img, tuple(a.astype(int)), tuple(b.astype(int)), c,
                                                          max(1, int(t)), cv2.LINE_AA), img.shape[0] / 720,
                              p, u, (255, 255, 255), 0.6))
-                label = {"blocked": "BLOCKED", "clash": "CLASH", "counter": e.get("why", "").upper()}[k]
+                label = {"clash": "CLASH", "counter": e.get("why", "").upper()}[k]
                 self._float(t_ms, xy, label, (255, 255, 255), 0.9, k=stack(("xy", tuple(xy.astype(int)))))
             elif k in ("heal", "invalid", "ko") and body(e["player"]) is not None:
                 p = body(e["player"])
@@ -302,11 +297,6 @@ class Hud:
             x, y = s["xy"]
             r = 0.8 * half
             glow.line((x - s["dir"] * 2.6 * r, y), (x, y), SPELL_COL[s["action"]], max(2, r))
-        for pid, p in players.items():
-            if p["shield_up"] and p["lane"] is not None and p["body_xy"] is not None:
-                sx = self._shield_x(p, x0, x1, W)
-                y = snap["lanes"][p["lane"]]
-                glow.line((sx, y - half), (sx, y + half), SPELL_COL[SHIELD], max(3, 14 * sc))
         for t0, t1, g, _ in active:
             if g:
                 g(glow, (t_ms - t0) / (t1 - t0))
@@ -314,10 +304,6 @@ class Hud:
         mark("glow")
 
         # 3. solid things on top of the light
-        for pid, p in players.items():
-            if p["shield_up"] and p["lane"] is not None and p["body_xy"] is not None:
-                sx, y = self._shield_x(p, x0, x1, W), snap["lanes"][p["lane"]]
-                cv2.ellipse(img, (int(sx), int(y)), (int(14 * sc), int(half)), 0, 0, 360, (255, 245, 220), 2, cv2.LINE_AA)
         for s in snap["spells"]:
             t = s["age_ms"] / 1000
             r = 0.8 * half
@@ -327,7 +313,7 @@ class Hud:
                 draw_paper(img, s["xy"], r, t)
             else:
                 draw_scissors(img, s["xy"], r, t, s["dir"])
-        mark("spells + shields")
+        mark("spells")
         self._hands(img, snap, sc)
         mark("hands")
         self._panels(img, snap, sc)
@@ -340,11 +326,6 @@ class Hud:
                 d(img, (t_ms - t0) / (t1 - t0))
         mark("feed + effects")
         return img
-
-    @staticmethod
-    def _shield_x(p, x0, x1, W):
-        """A shield stands just in front of its player, on the lane."""
-        return p["body_xy"][0] + (0.06 if p["body_xy"][0] <= (x0 + x1) / 2 else -0.06) * W
 
     def _hands(self, img, snap, sc):
         """A ring on each casting hand with the gesture recognised right now (T4-07), at the player (T4-08)."""
@@ -372,7 +353,7 @@ class Hud:
                 text(img, self.short(pid), (h[0], h[1] + 58 * sc), 0.6 * sc, col, 2, center=True)
 
     def _panels(self, img, snap, sc):
-        """HP, mana, rounds won, shield and potion of each player, in the top corners."""
+        """HP, mana, rounds won and potions of each player, in the top corners."""
         H, W = img.shape[:2]
         ids = list(snap["players"])
         pw = min(0.28 * W, 380 * sc)
@@ -391,12 +372,8 @@ class Hud:
             bar(img, x + 10 * sc, y + 36 * sc, pw - 20 * sc, 20 * sc, f, hp_col(f))
             text(img, f"{p['hp']}", (x + pw / 2, y + 52 * sc), 0.5 * sc, (255, 255, 255), 1, center=True)
             bar(img, x + 10 * sc, y + 60 * sc, pw - 20 * sc, 7 * sc, p["mana"] / p["max_mana"], (255, 160, 60))
-            st, st_col = ("shield UP", (255, 245, 210)) if p["shield_up"] else \
-                ("shield ready", (255, 225, 150)) if p["shield_in_s"] == 0 else \
-                (f"shield {p['shield_in_s']:.1f} s", (140, 140, 140))
-            text(img, st, (x + 10 * sc, y + 88 * sc), 0.5 * sc, st_col, 1)
-            text(img, f"potion x{p['potions']}", (x + pw * 0.55, y + 88 * sc), 0.5 * sc,
-                 (120, 230, 120) if p["potions"] else (140, 140, 140), 1)
+            text(img, f"potion x{p['potions']}", (x + pw / 2, y + 88 * sc), 0.5 * sc,
+                 (120, 230, 120) if p["potions"] else (140, 140, 140), 1, center=True)
 
     def _centre(self, img, snap, sc):
         H, W = img.shape[:2]

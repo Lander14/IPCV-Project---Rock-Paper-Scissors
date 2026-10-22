@@ -3,9 +3,10 @@ gestures cast spells (T2), face tracking + sunglasses + a real HP bar follow eac
 play_keyboard.py's loop; see its docstring for the shared camera flags (--size, --cam-auto, --dim).
 
   Fist = FIRE (rock)   open palm = WATER (paper)   index + middle finger = LIGHTNING (scissors)
-  The raised hand picks the lane, same as in play_keyboard.py.
-  SHIELD / POTION have no camera gesture yet (see game/README.md "to decide as a team"), so they stay on
-  the keyboard:  P1 F shield  G potion   |   P2 H shield  N potion.
+  The raised hand picks the lane, same as in play_keyboard.py. Defence is countering in the same lane -
+  there is no shield (dropped, 22 Oct 2026 team decision).
+  POTION's camera trigger is still pending (see game/README.md "to decide as a team"), so it stays on
+  the keyboard:  P1 G   |   P2 N.
   --solo: you are always player 1 (even standing right of centre) against the computer, player 2
   (--level easy / normal / hard).
   --no-glasses / --no-hp-bar: turn off the face effects.   --log metrics.csv: per-frame hand metrics,
@@ -25,14 +26,14 @@ import cv2
 
 from bot import LEVELS, Bot
 from camera import Camera
-from game_logic import POTION, SHIELD, Config, Game, PlayerInput
+from game_logic import POTION, Config, Game, PlayerInput
 from hud import Hud, text
 from play_keyboard import VirtualPlayers, log, plain_background
 from vision import Vision
 
-KEYBOARD_ACTIONS = {"f": (1, SHIELD), "g": (1, POTION), "h": (2, SHIELD), "n": (2, POTION)}
+KEYBOARD_ACTIONS = {"g": (1, POTION), "n": (2, POTION)}
 HOLD_MS = 600
-HELP = ("Fist=FIRE  open palm=WATER  index+middle=LIGHTNING  |  shield/potion: P1 F/G  P2 H/N  |  Esc quit")
+HELP = ("Fist=FIRE  open palm=WATER  index+middle=LIGHTNING  |  potion (camera trigger pending): P1 G  P2 N  |  Esc quit")
 LOG_HEADER = ["t", "frame", "cam_frame", "slot", "present", "stale", "conf", "raw_gesture", "gesture",
              "wrist_raw_x", "wrist_raw_y", "wrist_sm_x", "wrist_sm_y", "speed_px_s", "filter_on"]
 
@@ -104,7 +105,7 @@ def main():
                 if bot is not None and pid == 2:
                     continue                                           # player 2 is the computer
                 action, until = held[pid]
-                if t_ms < until:                                       # a keyboard shield/potion override, held
+                if t_ms < until:                                       # a keyboard potion override, held
                     inp = inputs[pid]
                     inputs[pid] = PlayerInput(inp.present, action, inp.hand_xy, inp.body_xy)
             events = game.update(t_ms, inputs)

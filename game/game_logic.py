@@ -4,8 +4,8 @@ A real-time fight in rounds. Between the two players there are THREE LANES (top,
   - a stable gesture (rock, paper or scissors) launches a spell into the lane at the height of the casting hand;
     it travels slowly along that lane towards the opponent (about 3.5 s)
   - two spells that meet in the same lane follow rock-paper-scissors: the winner goes on, the loser is destroyed,
-    equal spells destroy each other. Spells in different lanes pass each other.
-  - a spell that reaches the end of its lane hits the opponent, unless the opponent holds a shield in that lane
+    equal spells destroy each other. Spells in different lanes pass each other. This is the only defence.
+  - a spell that reaches the end of its lane, uncountered, hits the opponent
   - mana and a cooldown stop spamming; to cast again you first have to change the gesture
 A round ends at K.O. (or when the round time runs out). Best of 3 rounds wins the match.
 
@@ -27,16 +27,16 @@ from dataclasses import dataclass
 
 # ------------------------------------------------------------------ actions and rules
 ROCK, PAPER, SCISSORS = "ROCK", "PAPER", "SCISSORS"
-SHIELD, POTION = "SHIELD", "POTION"
+POTION = "POTION"
 SPELLS = (ROCK, PAPER, SCISSORS)
-ACTIONS = SPELLS + (SHIELD, POTION)
+ACTIONS = SPELLS + (POTION,)
 
 BEATS = {PAPER: ROCK, SCISSORS: PAPER, ROCK: SCISSORS}          # spell -> the spell it beats
 WHY = {PAPER: "Paper wraps Rock", SCISSORS: "Scissors cut Paper", ROCK: "Rock smashes Scissors"}
 
-# names the gesture module may send -> game action. Anything else ("?", None, typos) counts as no action.
+# names the gesture module may send -> game action. Anything else ("?", None, typos, "SHIELD") counts as no action.
 GESTURE_TO_ACTION = {
-    "ROCK": ROCK, "PAPER": PAPER, "SCISSORS": SCISSORS, "SHIELD": SHIELD, "POTION": POTION,
+    "ROCK": ROCK, "PAPER": PAPER, "SCISSORS": SCISSORS, "POTION": POTION,
     "rock": ROCK, "paper": PAPER, "scissors": SCISSORS,
     "FIRE": ROCK, "WATER": PAPER, "LIGHTNING": SCISSORS,          # names of the first hand script
 }
@@ -57,10 +57,7 @@ class Config:
     max_mana: float = 100
     mana_regen: float = 15           # mana per second
     spell_cost: float = 30
-    shield_cost: float = 30
     cast_cooldown_ms: int = 800      # minimum time between two spells of the same player
-    shield_max_ms: int = 2000        # a shield lasts at most this long ...
-    shield_cooldown_ms: int = 4000   # ... and then needs this long to come back
     potion_heal: int = 20
     potions_per_round: int = 1
     stable_frames: int = 4           # a gesture counts after this many frames in a row
@@ -113,9 +110,6 @@ class PlayerState:
     armed: str | None = None             # stable action not used yet: a new gesture = a new command
     said: bool = False                   # "no mana" / "recharging" already reported for this gesture
     last_cast: float = -1e9              # fight-clock time of the last spell
-    shield_up: bool = False
-    shield_since: float = 0.0
-    shield_ready_at: float = 0.0         # fight-clock time when the shield can be raised again
 
     @property
     def alive(self) -> bool:
@@ -220,7 +214,6 @@ class Game:
                 "hp": p.hp, "max_hp": cfg.max_hp, "mana": p.mana, "max_mana": cfg.max_mana, "alive": p.alive,
                 "present": p.present, "ready": p.present and p.gesture in READY_GESTURES, "gesture": p.stable,
                 "lane": self.lane_of(p.hand_xy[1]) if p.hand_xy else None,
-                "shield_up": p.shield_up, "shield_in_s": max(0.0, (p.shield_ready_at - self.gt) / 1000),
                 "potions": p.potions, "rounds_won": p.rounds_won, "matches_won": p.matches_won,
                 "cooldown": max(0.0, 1 - (self.gt - p.last_cast) / cfg.cast_cooldown_ms),
                 "hand_xy": p.hand_xy, "body_xy": p.body_xy,
@@ -276,13 +269,10 @@ class Game:
         for p in self.players.values():
             p.hp, p.mana, p.potions = self.cfg.max_hp, self.cfg.max_mana, self.cfg.potions_per_round
             p.armed, p.said, p.last_cast = None, False, -1e9
-            p.shield_up, p.shield_ready_at = False, self.gt
         self._set(ROUND_START, t, ev)
 
     def _end_round(self, t, ev, winner, reason):
         self.spells = []
-        for p in self.players.values():
-            p.shield_up = False
         self.round_winner, self.end_reason = winner, reason
         if winner is not None:
             self.players[winner].rounds_won += 1
@@ -320,9 +310,6 @@ class Game:
         for pid in self._alive_ids():
             p = self.players[pid]
             p.mana = min(cfg.max_mana, p.mana + cfg.mana_regen * dt / 1000)
-            if p.shield_up and (p.stable != SHIELD or gt - p.shield_since >= cfg.shield_max_ms):
-                p.shield_up, p.shield_ready_at = False, gt + cfg.shield_cooldown_ms
-                ev.append(self._event("shield_down", player=pid))
             a = p.armed
             if a is None or not p.present:
                 continue
@@ -343,15 +330,6 @@ class Game:
                 p.mana, p.last_cast, p.armed = p.mana - cfg.spell_cost, gt, None
                 ev.append(self._event("cast", player=pid, action=a, spell=s.sid, target=target.pid, lane=lane,
                                       xy=(x0, self.lane_y[lane])))
-            elif a == SHIELD:
-                if gt < p.shield_ready_at:
-                    self._refuse(p, ev, f"shield back in {(p.shield_ready_at - gt) / 1000:.1f} s")
-                    continue
-                if p.mana < cfg.shield_cost:
-                    self._refuse(p, ev, "no mana")
-                    continue
-                p.shield_up, p.shield_since, p.mana, p.armed = True, gt, p.mana - cfg.shield_cost, None
-                ev.append(self._event("shield_up", player=pid, lane=self._lane(p)))
             elif a == POTION:
                 p.armed = None
                 if p.potions <= 0:
@@ -402,12 +380,9 @@ class Game:
             if not t.alive:
                 continue
             xy = (t.body_xy[0], self.lane_y[s.lane])
-            if t.shield_up and self._lane(t) == s.lane:
-                ev.append(self._event("blocked", player=s.owner, target=t.pid, action=s.action, lane=s.lane, xy=xy))
-            else:
-                t.hp = max(0, t.hp - cfg.spell_damage)
-                ev.append(self._event("hit", player=s.owner, target=t.pid, action=s.action, lane=s.lane,
-                                      amount=cfg.spell_damage, xy=xy))
-                if not t.alive:
-                    ev.append(self._event("ko", player=t.pid))
+            t.hp = max(0, t.hp - cfg.spell_damage)
+            ev.append(self._event("hit", player=s.owner, target=t.pid, action=s.action, lane=s.lane,
+                                  amount=cfg.spell_damage, xy=xy))
+            if not t.alive:
+                ev.append(self._event("ko", player=t.pid))
         self.spells = [s for s in self.spells if s.sid not in gone]

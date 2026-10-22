@@ -1,7 +1,7 @@
 """Tests of the game mechanics, without camera.   Run:  python test_game_logic.py   (or: pytest)"""
 from bot import Bot
 from game_logic import (BEATS, FIGHT, LOBBY, MATCH_OVER, PAPER, PAUSED, POTION, RESUME, ROCK, ROUND_END,
-                        ROUND_START, SCISSORS, SHIELD, SPELLS, Config, Game, PlayerInput)
+                        ROUND_START, SCISSORS, SPELLS, Config, Game, PlayerInput)
 
 FPS = 30
 W, H = 1280, 720
@@ -139,28 +139,24 @@ def test_same_spells_cancel_out():
     assert s.count("clash") == 1 and s.hp() == {1: 100, 2: 100}
 
 
-def test_shield_blocks_only_its_lane():
+def test_shield_gesture_is_now_ignored():
+    # dropped (22 Oct 2026 team decision): a "SHIELD" gesture is unknown input, exactly like a typo or "?"
+    s = Sim()
+    s.fight()
+    s.tap(1, "SHIELD", 0.3, lane=2)
+    s.secs(2.0)
+    assert s.count("cast") == 0 and s.count("invalid") == 0 and s.hp() == {1: 100, 2: 100}
+
+
+def test_countering_in_the_same_lane_is_the_only_defence():
+    # same mechanic as test_counter_in_the_same_lane, restated here since it now has no alternative
     s = Sim()
     s.fight()
     s.tap(1, ROCK, 0.3, lane=2)
     s.secs(2.0)
-    s.tap(2, SHIELD, 1.5, lane=2)                    # shield in the right lane when the rock arrives
-    assert s.count("blocked", target=2) == 1 and s.hp()[2] == 100
-    s.secs(4.5)                                      # shield recharges
-    s.tap(1, PAPER, 0.3, lane=0)
-    s.secs(2.0)
-    s.tap(2, SHIELD, 1.5, lane=2)                    # shield in the wrong lane
-    assert s.count("hit", target=2) == 1 and s.hp()[2] == 75
-
-
-def test_shield_lasts_at_most_2_s_then_recharges():
-    s = Sim()
-    s.fight()
-    s.secs(3, {2: SHIELD})
-    assert s.count("shield_down", player=2) == 1 and not s.game.players[2].shield_up
-    s.secs(0.5)
-    s.secs(0.5, {2: SHIELD})
-    assert s.count("shield_up", player=2) == 1 and s.count("invalid", player=2) == 1
+    s.tap(2, PAPER, 0.3, lane=2)                     # paper wraps the incoming rock: no hit, paper flies on
+    s.secs(5)
+    assert s.count("counter", player=2, beaten=ROCK) == 1 and s.count("hit", target=2) == 0
 
 
 # ------------------------------------------------------------------ anti-spam
@@ -286,7 +282,7 @@ def test_bot_answers_incoming_spells():
         s.tap(1, ROCK, 0.4, lane=i % 3)
         s.secs(1.8)
     s.secs(4)
-    answered = s.count("counter", player=2) + s.count("blocked", player=1)
+    answered = s.count("counter", player=2)
     assert answered >= 5, answered                   # hard: answers most of the 8 rocks
 
 
@@ -294,7 +290,7 @@ def test_two_bots_play_a_whole_match():
     s = Sim(bots={1: Bot(1, "normal", seed=1), 2: Bot(2, "normal", seed=2)})
     s.until(MATCH_OVER, limit_s=400)
     assert s.game.match_winner in (1, 2)
-    assert s.count("counter") + s.count("clash") + s.count("blocked") > 0
+    assert s.count("counter") + s.count("clash") > 0
 
 
 if __name__ == "__main__":

@@ -1,11 +1,11 @@
 """Play the rock-paper-scissors duel with the keyboard, drawn on the webcam picture.
 Tests the game mechanics and the effects before the hand / player tracking is plugged in.
 
-  Player 1 (left):   A ROCK   S PAPER   D SCISSORS   F SHIELD   G POTION   Q / W / E = hand to top / middle / bottom lane
-  Player 2 (right):  J ROCK   K PAPER   L SCISSORS   H SHIELD   N POTION   U / I / O = hand to top / middle / bottom lane
+  Player 1 (left):   A ROCK   S PAPER   D SCISSORS   G POTION   Q / W / E = hand to top / middle / bottom lane
+  Player 2 (right):  J ROCK   K PAPER   L SCISSORS   N POTION   U / I / O = hand to top / middle / bottom lane
   1 / 2 = player leaves / comes back.   Esc = quit.
   --solo: you are player 1 (left), the computer plays player 2 (--level easy / normal / hard).
-  A key press = the gesture shown for 0.6 s; holding the key holds it (shield, ready).
+  A key press = the gesture shown for 0.6 s; holding the key holds it (useful to stay ready).
   Start: both hold PAPER (open palm) for 1 s.
 
     python play_keyboard.py                  # webcam picture as background (mirrored)
@@ -23,15 +23,15 @@ import numpy as np
 
 from bot import LEVELS, Bot
 from camera import Camera
-from game_logic import PAPER, POTION, ROCK, SCISSORS, SHIELD, Config, Game, PlayerInput
+from game_logic import PAPER, POTION, ROCK, SCISSORS, Config, Game, PlayerInput
 from hud import PLAYER_COL, Hud, shade, text
 
-KEYS = {"a": (1, ROCK), "s": (1, PAPER), "d": (1, SCISSORS), "f": (1, SHIELD), "g": (1, POTION),
-        "j": (2, ROCK), "k": (2, PAPER), "l": (2, SCISSORS), "h": (2, SHIELD), "n": (2, POTION)}
+KEYS = {"a": (1, ROCK), "s": (1, PAPER), "d": (1, SCISSORS), "g": (1, POTION),
+        "j": (2, ROCK), "k": (2, PAPER), "l": (2, SCISSORS), "n": (2, POTION)}
 LANE_KEYS = {"q": (1, 0), "w": (1, 1), "e": (1, 2), "u": (2, 0), "i": (2, 1), "o": (2, 2)}
 HOLD_MS = 600          # one key press holds the gesture this long; the key repeat keeps it while the key is down
-HELP_SOLO = "You: A rock  S paper  D scissors  F shield  G potion  Q/W/E lane  |  1 leave  |  Esc quit"
-HELP = "P1: A rock  S paper  D scissors  F shield  G potion  Q/W/E lane  |  P2: J K L  H N  U/I/O  |  1/2 leave  Esc"
+HELP_SOLO = "You: A rock  S paper  D scissors  G potion  Q/W/E lane  |  1 leave  |  Esc quit"
+HELP = "P1: A rock  S paper  D scissors  G potion  Q/W/E lane  |  P2: J K L  N  U/I/O  |  1/2 leave  Esc"
 
 
 class VirtualPlayers:

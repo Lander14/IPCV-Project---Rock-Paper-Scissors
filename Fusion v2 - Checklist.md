@@ -13,6 +13,7 @@ Review of the second fusion (Claude Code, 22 Oct 2026). Teammates' files are int
   *Done when:* ≤ 33 ms per camera frame with 2 people and ≥ 3 hands, or a clear explanation of why not.
 - [ ] **Lobby:** the over-head "P1 100/100" label overlaps the title → hide the over-head bar during LOBBY.
 - [ ] **README** updated with the 2-person numbers and the fixes; one commit per fix.
+- [ ] **Shield removed** from the game and from the meeting material; potion kept (prompt in section 6).
 
 ## 2. Review after Claude Code (ask Claude in chat)
 
@@ -39,7 +40,9 @@ Review of the second fusion (Claude Code, 22 Oct 2026). Teammates' files are int
 - [ ] **T1:** the face detector misses small faces on the full frame; the game now searches around the pose head (once fix 2 is in).
 - [ ] **T3:** validate the colour re-ID option (`appearance=True`) on the two-person clip.
 - [ ] Where do the sunglasses images come from (licence)?
-- [ ] Still open: shield gesture, potion gesture, lane heights, demo laptop and its environment, shared git repo, owner name per module.
+- [x] Shield: **dropped** (team decision, 22 Oct 2026).
+- [ ] **Potion: kept, still pending.** Decide how the camera triggers it (e.g. a real bottle or cup at the mouth: YOLO's COCO classes `bottle` / `cup` near the pose head; or a dedicated gesture) and who builds it. Until then it stays on the keyboard: P1 G, P2 N.
+- [ ] Still open: lane heights, demo laptop and its environment, shared git repo, owner name per module.
 
 ## 5. Prompt for Claude Code
 
@@ -85,4 +88,52 @@ then make one commit per fix below.
 
 Finish with: all tests passing, the list of commits, and what is still unvalidated on real two-player
 footage.
+```
+
+## 6. Prompt for Claude Code – remove the shield, keep the potion
+
+```
+Team decision (22 Oct 2026): the SHIELD is dropped completely. The POTION stays (its camera trigger is
+still pending; until then it remains on the keyboard: P1 G, P2 N). Actions are now: rock / paper /
+scissors spells + lane choice + potion. Work in this order, one commit per step. Do not touch the
+teammates' files (face_tracking/, hand_gestures/, pose_reid/). If any potion code was already removed by
+an earlier instruction, restore it from commit 643ce6d.
+
+STEP 1 - meeting material first (I am showing it now), commit as soon as it is done:
+- docs/team_meeting.md: remove every mention of the shield (gesture decision, keys F/H, any shield
+  feature). Under "decisions taken": "Shield dropped (22 Oct)". Under "pending": "Potion kept - decide
+  how the camera triggers it (e.g. real bottle / cup at the mouth: YOLO COCO bottle / cup near the pose
+  head, or a dedicated gesture) and who builds it; keyboard G / N until then". Update the T4 rows of the
+  requirement table: T4-02 (>= 2 actions) = 3 spell gestures + lane choice + potion; T4-03
+  (interaction) = spells clashing / countering in the lanes (player-player) + potion with a real object
+  (player-object, pending).
+
+STEP 2 - the game (shield only):
+- game_logic.py: remove SHIELD and its GESTURE_TO_ACTION entry (an incoming "SHIELD" gesture must simply
+  be ignored, like any unknown gesture), Config.shield_cost / shield_max_ms / shield_cooldown_ms, the
+  shield fields of PlayerState, the snapshot keys shield_up / shield_in_s and the events shield_up /
+  shield_down / blocked. Keep POTION, potion_heal, potions_per_round, the "potions" snapshot key and the
+  "heal" event exactly as they are. Defence against a spell is now only countering in the same lane.
+- hud.py: remove shield drawing, the "shield ready" panel text and the feed sentences for the removed
+  events; keep "potion x1" and the heal feedback. Keep the panel layout tidy.
+- bot.py: remove the shield behaviour; keep drinking the potion when hurt; the bot defends by countering.
+- play_keyboard.py: remove keys F (P1) and H (P2); keep G / N for the potion; update the help text.
+- play_camera.py: keep the keyboard override only for the potion (G / N); remove f / h and the shield
+  help text; say in the help that the potion's camera trigger is pending.
+- simulate.py: remove the shield from the scripted match, keep the potion.
+- test_game_logic.py: delete the shield tests, add a test that a "SHIELD" gesture is ignored and that
+  countering in the same lane still works; keep the potion tests. All tests must pass.
+
+STEP 3 - regenerate and document:
+- regenerate docs/img/camera_mode_samples.jpg (its HUD panels show "shield ready") and
+  game/simulated_game.mp4;
+- game/README.md: rules, T4 requirement mapping, keyboard keys, events list, PlayerInput comment, the
+  "to decide as a team" list (shield: dropped; potion: camera trigger pending); re-measure the bot win
+  rates per level (5 games each, as before) since its defence changed;
+- "IPCV Project - Task Backlog.md": do not delete the history: mark the shield rows and tasks as
+  "Dropped (team decision, 22 Oct 2026)", mark the potion as "kept - camera trigger pending", and remove
+  the shield step from the 60 s demo script.
+
+Finish with: grep -riE "shield" over the project (excluding .venv, .git and the teammates' folders)
+showing only the "dropped" notes, all tests passing, and the list of commits.
 ```

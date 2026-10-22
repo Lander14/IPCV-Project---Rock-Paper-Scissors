@@ -1,9 +1,9 @@
 """Computer opponent for playing alone (single-player mode).
 
 The bot plays through the same input as a person: every frame it says which gesture it shows and in which lane its
-hand is. So it follows exactly the same rules (4 stable frames, change the gesture to cast again, cooldown, mana,
-shield recharge). It reads the game state, answers incoming spells after a human-like reaction time (counter-spell
-in the same lane, or a shield just before the spell arrives) and attacks at random moments in random lanes.
+hand is. So it follows exactly the same rules (4 stable frames, change the gesture to cast again, cooldown, mana).
+It reads the game state, answers incoming spells with a counter-spell in the same lane after a human-like
+reaction time, and attacks at random moments in random lanes.
 
     bot = Bot(pid=2, level="normal")
     every frame:
@@ -12,15 +12,15 @@ in the same lane, or a shield just before the spell arrives) and attacks at rand
 """
 import random
 
-from game_logic import BEATS, FIGHT, LOBBY, MATCH_OVER, PAPER, POTION, SHIELD, SPELLS
+from game_logic import BEATS, FIGHT, LOBBY, MATCH_OVER, PAPER, POTION, SPELLS
 
-LEVELS = {   # chance to answer a spell, reaction time (s), time between own attacks (s), chance to use the shield
-    "easy":   {"react": 0.35, "delay": (0.9, 1.5), "attack": (2.8, 4.5), "shield": 0.25},
-    "normal": {"react": 0.65, "delay": (0.6, 1.0), "attack": (2.0, 3.2), "shield": 0.3},
-    "hard":   {"react": 0.9, "delay": (0.35, 0.6), "attack": (1.3, 2.2), "shield": 0.35},
+LEVELS = {   # chance to answer a spell, reaction time (s), time between own attacks (s)
+    "easy":   {"react": 0.35, "delay": (0.9, 1.5), "attack": (2.8, 4.5)},
+    "normal": {"react": 0.65, "delay": (0.6, 1.0), "attack": (2.0, 3.2)},
+    "hard":   {"react": 0.9, "delay": (0.35, 0.6), "attack": (1.3, 2.2)},
 }
 COUNTER = {loser: winner for winner, loser in BEATS.items()}       # spell -> the spell that beats it
-HOLD_MS, RELEASE_MS, SHIELD_MS = 400, 500, 1500                     # like a person: show, then drop the hand
+HOLD_MS, RELEASE_MS = 400, 500                                      # like a person: show, then drop the hand
 
 
 class Bot:
@@ -64,11 +64,7 @@ class Bot:
                 continue
             arrive = t + abs(body[0] - s["xy"][0]) / speed * 1000
             react = t + 1000 * self.rng.uniform(*self.lv["delay"])
-            shield_at = arrive - 1100                                     # up a bit before the spell arrives
-            shield_ok = me["shield_in_s"] * 1000 < shield_at - t and shield_at > react
-            if shield_ok and (me["mana"] < 40 or self.rng.random() < self.lv["shield"]):
-                self._later(shield_at, SHIELD, s["lane"], SHIELD_MS)
-            elif react < arrive - 600:
+            if react < arrive - 600:
                 self._later(react, COUNTER[s["action"]], s["lane"])
         if self.next_attack is None:                                      # 2. attack now and then
             self.next_attack = t + 1000 * self.rng.uniform(*self.lv["attack"])

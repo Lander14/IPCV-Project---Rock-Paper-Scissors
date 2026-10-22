@@ -9,7 +9,7 @@ from pathlib import Path
 
 import cv2
 
-from game_logic import FIGHT, LOBBY, MATCH_OVER, PAPER, POTION, ROCK, SCISSORS, SHIELD, Config, Game, PlayerInput
+from game_logic import FIGHT, LOBBY, MATCH_OVER, PAPER, POTION, ROCK, SCISSORS, Config, Game, PlayerInput
 from hud import Hud, shade
 from play_keyboard import VirtualPlayers, log
 
@@ -19,7 +19,7 @@ TOP, MID, LOW = 0, 1, 2
 SCRIPT = {
     1: [(0.5, 1, ROCK, MID),                          # rock rolls down the middle lane       -> P2 75
         (2.0, 2, SCISSORS, TOP), (2.6, 1, ROCK, TOP),  # rock smashes the scissors, goes on    -> P2 50
-        (4.0, 2, PAPER, LOW), (6.5, 1, SHIELD, LOW, 1.5),   # P1 shields the bottom lane in time: blocked
+        (4.0, 2, PAPER, LOW), (6.0, 1, SCISSORS, LOW),      # P1 counters: P2's paper destroyed, P1's scissors fly on
         (8.5, 1, SCISSORS, MID), (9.0, 2, SCISSORS, MID),   # scissors meet scissors: both gone
         (10.0, 2, POTION, MID),                       # P2 +20                                -> P2 70
         (10.5, 1, PAPER, TOP), (11.5, 1, ROCK, LOW), (13.0, 1, SCISSORS, MID)],   # -> 45, 20, 0: K.O.
@@ -29,7 +29,7 @@ SCRIPT = {
         (6.0, 2, PAPER, MID), (6.5, 1, SCISSORS, MID),      # scissors cut the paper, go on        -> P2 75
         (7.0, 2, ROCK, TOP)],                         #                                       -> P1 0: K.O.
     3: [(0.5, 1, ROCK, TOP), (0.8, 2, SCISSORS, TOP),  # counter                               -> P2 75
-        (1.5, 1, PAPER, MID), (4.0, 2, SHIELD, MID, 1.5),   # blocked
+        (1.5, 1, PAPER, MID), (4.0, 2, SCISSORS, MID),      # P2 counters: P1's paper destroyed, P2's scissors fly on
         (2.5, 1, SCISSORS, LOW), (3.5, 1, ROCK, MID), (4.5, 1, PAPER, LOW)],     # -> 50, 25, 0: P1 wins
 }
 
