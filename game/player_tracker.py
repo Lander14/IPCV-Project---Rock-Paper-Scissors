@@ -78,20 +78,30 @@ class IdentityManager:
     - a new tracker id goes AT ONCE to a player that is not visible in this frame, if it is close to where that
       player was (or that player has been away longer than `forget_s`: re-entry anywhere)
     - the very first time, players are given by side: left = PLAYER 1, right = PLAYER 2
+      (unless `solo_pid` fixes it: see below)
     - never more than n players: anyone else is ignored
     - `appearance=True` (default off, from the group's re-ID script) also matches on a clothing-colour
       histogram passed into `update()`; with none passed, behaviour is identical to `appearance=False`.
+    - `solo_pid` (default off): the *first* ever detection always becomes this player, regardless of
+      which side of the frame they are on, and every other slot's own first-time cost becomes infinite
+      (so a bystander who walks into frame is ignored, never mistaken for "player 2" - harmless either
+      way since --solo overwrites player 2's input with the bot, but this keeps the tracking state
+      itself honest). For --solo play, where the one real person must always be P1 even if they happen
+      to stand right of centre - the side-based rule could otherwise hand the human's own slot to the
+      bot's slot instead.
     """
 
-    def __init__(self, n=2, width=1280, near=0.35, forget_s=3.0, appearance=False):
+    def __init__(self, n=2, width=1280, near=0.35, forget_s=3.0, appearance=False, solo_pid=None):
         self.w, self.near, self.forget = float(width), near, forget_s * 1000
-        self.appearance = appearance
+        self.appearance, self.solo_pid = appearance, solo_pid
         self.slots = {p: {"tid": None, "c": None, "seen": None} for p in range(1, n + 1)}
         self.hist = {p: None for p in range(1, n + 1)}
 
     def _cost(self, p, c, t, hist=None):
         s = self.slots[p]
         if s["c"] is None:                                      # never seen: left player -> 1, right -> 2
+            if self.solo_pid is not None:
+                return 0.0 if p == self.solo_pid else math.inf
             side = c[0] / self.w
             return side if p == 1 else 1 - side
         d = math.dist(c, s["c"]) / self.w
@@ -145,7 +155,6 @@ class Player:
     distance_m: float | None = None      # rough distance to the camera (shoulder width), T3-08
     track_id: int | None = None
     seen_ms: float | None = None         # time of the last detection
-    eyes: tuple | None = None            # ((x, y), (x, y)) image-left / image-right eye, for the AR overlay
 
     def raised_hand(self):
         """The wrist that is highest in the picture: the casting hand, if the hand module does not say otherwise."""
@@ -158,13 +167,14 @@ def _ema(old, new, a):
 
 class PlayerTracker:
     def __init__(self, model=None, imgsz=480, every=2, device=None, conf=0.35, kp_conf=0.35, min_height=0.25,
-                 smooth=0.6, keep_ms=300, tracker=None, appearance=False):
+                 smooth=0.6, keep_ms=300, tracker=None, appearance=False, solo=False):
         from ultralytics import YOLO                            # here, so the rest can be used without it
         local = HERE / "models" / "yolov8n-pose.pt"                 # put the model next to the code for the ZIP
         self.model = YOLO(str(model) if model else str(local) if local.exists() else "yolov8n-pose.pt")
         self.tracker = str(tracker or HERE / "bytetrack_players.yaml")
         self.imgsz, self.every, self.device, self.conf, self.kp_conf = imgsz, every, device, conf, kp_conf
-        self.min_height, self.smooth, self.keep_ms, self.appearance = min_height, smooth, keep_ms, appearance
+        self.min_height, self.smooth, self.keep_ms = min_height, smooth, keep_ms
+        self.appearance, self.solo = appearance, solo
         self.players = {1: Player(), 2: Player()}
         self.ids, self.n, self.ms = None, 0, 0.0
 
@@ -172,7 +182,7 @@ class PlayerTracker:
         """Run (every `every` frames) and return {1: Player, 2: Player}. `frame` as the game shows it (mirrored)."""
         h, w = frame.shape[:2]
         if self.ids is None:
-            self.ids = IdentityManager(2, w, appearance=self.appearance)
+            self.ids = IdentityManager(2, w, appearance=self.appearance, solo_pid=1 if self.solo else None)
         self.n += 1
         if (self.n - 1) % self.every == 0:
             t0 = time.perf_counter()
@@ -211,11 +221,6 @@ class PlayerTracker:
             p.head = _ema(p.head, tuple(map(float, head)), a)
             p.wrists = [tuple(map(float, pts[j])) for j in (L_WR, R_WR) if ok[j]]
             p.box = tuple(map(float, boxes[i]))
-            if ok[L_EYE] and ok[R_EYE]:
-                e1, e2 = tuple(map(float, pts[L_EYE])), tuple(map(float, pts[R_EYE]))
-                p.eyes = (e1, e2) if e1[0] <= e2[0] else (e2, e1)    # (image-left point, image-right point)
-            else:
-                p.eyes = None
             if ok[L_SH] and ok[R_SH]:
                 p.shoulder_px = float(np.linalg.norm(pts[L_SH] - pts[R_SH]))
                 p.distance_m = f * SHOULDER_M / max(p.shoulder_px, 1.0)

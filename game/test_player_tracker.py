@@ -56,6 +56,19 @@ def test_crossing_with_kept_tracker_ids_keeps_identities():
         assert m.update([(1, (x, 360.0)), (2, (1280 - x, 360.0))], 100 * k) == {1: 1, 2: 2}
 
 
+def test_solo_forces_the_first_detection_onto_player_1_regardless_of_side():
+    m = IdentityManager(2, 1280, solo_pid=1)
+    assert m.update([(1, R)], 0) == {1: 1}                                    # lone person on the right: still P1
+    assert m.update([(1, (900.0, 360.0))], 100) == {1: 1}                     # and stays P1 as they move
+
+
+def test_solo_a_second_person_is_ignored_not_treated_as_player_2():
+    # solo play expects exactly one real player; a bystander should never take the bot's slot
+    m = IdentityManager(2, 1280, solo_pid=1)
+    m.update([(1, R)], 0)
+    assert m.update([(1, R), (2, L)], 100) == {1: 1}
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_")]
     for name, f in tests:

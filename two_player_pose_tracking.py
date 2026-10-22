@@ -1,8 +1,4 @@
 """
-DEPRECATED: superseded by game/player_tracker.py (built on this file, cut down to what the game needs)
-and game/vision.py (owns it inside the fused camera game loop). Kept for reference only; see
-game/README.md for the old-to-new mapping. Nothing in game/ imports this file.
-
 Two-player pose detection and identity tracking for IPCV Task 3.2.3.
 
 Features
@@ -17,11 +13,6 @@ Features
 Tested design target: Python 3.10+ with a webcam.
 The first run downloads the pretrained YOLO pose model if it is not cached.
 """
-import warnings
-
-warnings.warn(
-    "two_player_pose_tracking.py is superseded by game/player_tracker.py + game/vision.py; see game/README.md",
-    DeprecationWarning, stacklevel=2)
 
 from collections import deque
 import time

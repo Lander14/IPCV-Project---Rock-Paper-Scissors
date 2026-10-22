@@ -77,9 +77,11 @@ python play_keyboard.py --solo      # single player: you (left) against the comp
 python play_keyboard.py --solo --level hard     # easy | normal | hard
 python simulate.py                  # scripted match on assets/demo_background.jpg -> simulated_game.mp4
 python simulate.py --background clip.mp4   # the same on any picture or video
-python play_camera.py               # T2+T3+AR fused: pose tracking + hand gestures + sunglasses overlay
-python play_camera.py --solo --level hard
-python play_camera.py --no-glasses --every 3 --imgsz 384   # a slower laptop
+python play_camera.py               # T1+T2+T3 fused: pose tracking, hand gestures, face tracking + sunglasses + HP bar
+python play_camera.py --solo --level hard             # you are always player 1, even standing right of centre
+python play_camera.py --no-glasses --no-hp-bar
+python play_camera.py --every 3 --imgsz 384 --face-every 2   # a slower laptop
+python play_camera.py --log session.csv               # per-frame hand metrics (task2_hands.py's own CSV columns)
 ```
 
 Keyboard: **P1** A rock · S paper · D scissors · F shield · G potion · Q / W / E lane ·
@@ -98,12 +100,12 @@ In keyboard mode the players are virtual (thin outlines at fixed places); with t
 | `camera_check.py` | measures how many FPS the webcam really gives in each mode |
 | `test_game_logic.py` | tests (`python test_game_logic.py` or `pytest`) |
 | `assets/demo_background.jpg` | a frame of our own footage, background of the simulation |
-| `vision.py` | the fused camera pipeline: owns `PlayerTracker` + `HandAdapter`, one call each per frame |
-| `hand_adapter.py` | hand gesture classification (ported from `task2_hands.py`) + hand-to-player assignment |
-| `sunglasses_overlay.py` | the sunglasses AR overlay, from pose eye keypoints (ported from `face_tracking_final.py`) |
-| `play_camera.py` | camera version: pose + hand tracking instead of the keyboard, `--solo` against the computer too |
-| `test_vision.py` | tests of the fusion (gesture classifier, hand assignment, call counts, import hygiene) |
-| `assets/sunglasses_picture.jpg`, `sunglasses_picture2.jpg` | P1 / P2 sunglasses sprites (plain JPGs; keyed to RGBA at load) |
+| `vision.py` | the fused camera pipeline: owns `PlayerTracker` + `HandAdapter` + `FaceModule`, one call each per *camera* frame |
+| `hand_adapter.py` | MediaPipe hands -> `../hand_gestures/task2_hands.py`'s `HandSlot` filtering (unmodified) -> gesture + player |
+| `face_module.py` | `../face_tracking/face_tracking_final.py`'s `FaceDetector`/`FaceKalman`/`FaceTracker` (unmodified), linked to players |
+| `play_camera.py` | camera version: pose + hand + face tracking instead of the keyboard, `--solo` against the computer too |
+| `test_vision.py`, `test_face_module.py` | tests of the fusion (gesture classifier, assignment, call counts, import hygiene) |
+| `models/face_landmarker.task` | MediaPipe FaceLandmarker model (downloaded; see "Fusing the group's submitted code") |
 
 ### Single-player mode (`--solo`)
 
@@ -213,34 +215,118 @@ while True:
 
 ## Fusing the group's submitted code: `vision.py`
 
-`play_camera.py` replaces the keyboard with `vision.py`, a facade that is the **only** place that owns a
-model: one `PlayerTracker` (pose, its own `every`-frame cadence) and one `HandAdapter` (hands, every
-frame). Needs `pip install -r requirements-vision.txt` (mediapipe, ultralytics, lap) on top of the base
-`opencv-python` / `numpy` the rest of `game/` uses; `test_vision.py` and the rest of the test suite run
-fine without any of them installed (lazy imports, fakes injected in the tests). Each returns at most once per frame; `vision.process(frame, t_ms)` turns their output into the
-same `PlayerInput` the keyboard and the bot already feed the game, so `game_logic.py`, `hud.py`,
-`play_keyboard.py`, `simulate.py` and `bot.py` did not need to change.
+The three files each teammate submitted (`code pieces/OneDrive_1_10-21-2026.zip`) live **unchanged**, under
+their own names, next to the game: [`../face_tracking/face_tracking_final.py`](../face_tracking/face_tracking_final.py),
+[`../hand_gestures/task2_hands.py`](../hand_gestures/task2_hands.py),
+[`../pose_reid/two_player_pose_tracking_reid.py`](../pose_reid/two_player_pose_tracking_reid.py) (plus the two
+sunglasses JPGs, next to `face_tracking_final.py`, exactly where it already expects them). `game/` **imports and
+calls their real classes** - it does not re-implement what they do. `vision.py` is the facade that owns all of
+it: one `PlayerTracker` (pose), one `HandAdapter` (wrapping MediaPipe + `task2_hands.py`'s `HandSlot`), one
+`FaceModule` (wrapping `face_tracking_final.py`'s `FaceDetector` / `FaceKalman` / `FaceTracker`). Each runs **at
+most once per *camera* frame** (`Vision.process(frame, t_ms, n)`, `n` = `Camera.latest()`'s own frame counter;
+the render loop can run faster than the camera's 30 FPS, and used to re-run every model on a repeated picture).
+`game_logic.py`, `hud.py`, `play_keyboard.py`, `simulate.py` and `bot.py` are untouched - `PlayerInput` is still
+the only contract between vision and the game.
 
-| Group's submitted file (in `code pieces/OneDrive_1_10-21-2026.zip`) | Superseded by | What changed |
+Needs `pip install -r requirements-vision.txt` (mediapipe, ultralytics, lap) on top of the base
+`opencv-python` / `numpy` the rest of `game/` uses. `pytest game/` passes with none of that installed (lazy
+imports everywhere; fakes injected in the tests) - confirmed on both the plain interpreter and a venv with the
+real packages.
+
+| Group's file | Reused as | What `game/` adds around it (the file itself is untouched) |
 |---|---|---|
-| `two_player_pose_tracking_reid.py` | `player_tracker.py` (`IdentityManager(appearance=True)`) | the appearance/motion/pose cost is now an **additive, default-off** option on the existing identity matcher, not a second tracker; off by default because it is unvalidated on real footage (see Risks) |
-| `task2_hands.py` | `hand_adapter.py` | kept the finger-state classifier (FIRE/WATER/LIGHTNING) and MediaPipe wiring; dropped its own hold-to-confirm and its placeholder left/right hand assignment, since `game_logic`'s `stable_frames` debounce and the real `PlayerTracker` identities already do both, better |
-| `face_tracking_final.py` | `sunglasses_overlay.py` | kept `make_transparent` (the background-keying for the alpha-less JPGs) and the eye-line affine warp; dropped the separate face-landmark model, Kalman filter and face re-ID, since the pose keypoints `PlayerTracker` already extracts anchor the glasses with no extra inference |
-| `hand_detection/detect_hands.py` (already in the repo) | `hand_adapter.py` | deprecated as live code (`DeprecationWarning` when run directly); the hand_detection write-up and its figures are untouched |
-| `two_player_pose_tracking.py` (already in the repo) | `player_tracker.py` / `vision.py` | deprecated as live code (`DeprecationWarning` on import); nothing in `game/` ever imported it |
+| `face_tracking_final.py` | `face_module.FaceModule` | passes `game/models/face_landmarker.task` to `FaceDetector` directly (instead of the file's own hardcoded `C:\cvdata\...` constant, which is simply never read); links each `FaceTracker` track to a **player id** by nearest `PlayerTracker` head (the file's own track ids come from its own appearance re-ID and can disagree with the pose identity); calls `draw_sunglasses`/`draw_hp_bars` unmodified, with a `game_state` built fresh each frame from the real `game.snapshot()` instead of the file's own key-press test damage; an optional every-Nth-frame detect cadence, letting `FaceTracker`'s own coasting (`predict()` + `mark_missed()`, already in the file) fill the gap |
+| `task2_hands.py` | `hand_adapter.HandAdapter` | feeds its `HandSlot` (One Euro filter, grace frames, jump rejection, min confidence) from a MediaPipe `HandLandmarker` (Task API: the file's own `mp.solutions.hands` detector no longer exists in any MediaPipe build with Python 3.14 wheels - see "MediaPipe `mp.solutions`" below); classifies the *filtered* landmarks fresh every frame rather than using the file's own hold-to-confirm, since `game_logic`'s `stable_frames` debounce already does that job (stacking both would add a second delay); assigns the result to a player by nearest *raised* wrist, replacing the file's own left/right placeholder (its own docstring: "placeholder for Task 3 identity tracking") |
+| `two_player_pose_tracking_reid.py` | `player_tracker.IdentityManager(appearance=True)` | its appearance/motion/pose cost is an **additive, default-off** option on the existing identity matcher, not a second tracker; off by default because it is unvalidated on real two-player footage (see Risks) |
+| `hand_detection/detect_hands.py`, `two_player_pose_tracking.py` (already in the repo) | not reused for the camera mode | **not marked deprecated** - both stay exactly as the team wrote them, including their own `main()` and docs; `game/` simply doesn't call either |
 
-**Known risks, not yet resolved by a test:**
-- **MediaPipe on this Python.** This machine runs Python 3.14; MediaPipe wheels have historically lagged
-  new CPython releases. `pip install mediapipe` may simply fail here — check before the demo, on the
-  actual demo laptop's Python.
-- **Real-camera latency is unmeasured.** `benchmark.py`'s new `hand assignment` / `glasses overlay` rows
-  time only the post-processing (no YOLO/MediaPipe installed in this environment); the pose and hand
-  model calls themselves still need a real run on the demo hardware.
+### MediaPipe's `mp.solutions` (why `hand_adapter.py` has a shim, and `task2_hands.py` doesn't run standalone here)
+
+`mp.solutions.hands` - what `task2_hands.py` imports at module level - was removed from MediaPipe before
+MediaPipe shipped a Python 3.14 wheel (checked: 0.10.30 through 1.1.1, the only versions with cp314 wheels,
+all lack `mp.solutions`; this machine runs 3.14). There is **no installable MediaPipe version** on this Python
+where the unmodified file would otherwise import. `hand_adapter._th()` installs a two-line shim
+(`mp.solutions.hands.HAND_CONNECTIONS`, the one symbol the file reads at import time, only to build a drawing
+helper this module never calls) before importing it - the file itself is never touched. The consequence: running
+`python hand_gestures/task2_hands.py` directly (its own webcam demo) will still fail on this Python; only the
+pure logic this module imports (`HandSlot`, `OneEuro`, `assign`) is exercised, which needs no live detector.
+
+### Bug fixes from a live run
+
+A real two-player/solo test surfaced two bugs no unit test had caught:
+- **`--solo` could hand the human's slot to the bot.** `IdentityManager`'s "first time: left = P1, right = P2"
+  rule means a lone player standing right of centre got assigned P2 - the slot `play_camera.py` always
+  overwrites with the bot's own input, silencing the real person. Fixed with `IdentityManager(solo_pid=1)`:
+  in solo mode the *first* detection always becomes P1, and a bystander is never mistaken for P2 (tests:
+  `test_player_tracker.py::test_solo_*`).
+- **The pose model re-ran on repeated camera frames.** `Vision.process`'s frame-dedup (`n` from
+  `Camera.latest()`) only covered the hand model; pose re-ran every render tick even when the camera hadn't
+  produced a new picture yet. Now both (and faces) are skipped together on a repeated `n`
+  (`test_vision.py::test_vision_does_not_rerun_hands_or_faces_on_the_same_camera_frame_number`).
+
+### T1 / T2 requirement coverage
+
+Against `IPCV Project - Requirements Specification.md`'s own IDs:
+
+| ID | How |
+|---|---|
+| T1-01 detect ≥ 2 faces | `FaceTracker`'s `MAX_FACES = EXPECTED_FACES = 2`, unmodified |
+| T1-02 location/size/orientation over time | `FaceKalman`'s `(cx, cy, r, roll)` state, unmodified |
+| T1-03 temporal filtering | `FaceKalman` itself *is* the filter (constant-velocity Kalman), unmodified |
+| T1-04 an effect on each face | sunglasses, via `draw_sunglasses` |
+| T1-05 aligned through movement/turn/distance | the Kalman state drives the affine warp every frame, unmodified |
+| T1-06 no switching between players | tracks are relinked to a **player id** by nearest head every frame, not kept on `FaceTracker`'s own (re-ID-derived) track id |
+| T1-07 short failures / partial occlusion | `FaceTracker`'s own coasting (`LOST_TIMEOUT=0.8s`, `mark_missed`) + the measured half-frame-search recovery (see Risks); degrades to "no glasses for that player", never a crash |
+| T1-08 one extra effect, different from the face effect | the HP bar (`draw_hp_bars`), above the head |
+| T1-09 a meaningful role, not static | the bar reads the real `hp`/`max_hp` from `game.snapshot()` and flashes on a real `hit` event |
+| T2-04 temporal filtering/smoothing | `HandSlot`'s One Euro filter, unmodified |
+| T2-05 confidence to flag unreliable keypoints | `HandSlot.update`'s `MIN_CONF` gate, unmodified |
+| T2-06 missing keypoints, no uncontrolled actions | `HandSlot`'s `GRACE_FRAMES` hold-then-reset, unmodified; an unassigned hand simply gives no gesture |
+| T2-07 smoothness vs. responsiveness | One Euro's adaptive cutoff (unmodified) + classifying every frame fresh, instead of stacking the file's own hold-to-confirm on top of `game_logic`'s debounce |
+| T2-08 evaluate responsiveness/stability | `benchmark.py --real`'s per-stage ms (below) + `--log`'s CSV (raw vs. filtered wrist, confidence, latency columns) for a real-session measurement |
+
+### Measured performance (RTX 3050 Ti laptop, `python benchmark.py --real`, 1280×720)
+
+| Stage | CPU | CUDA |
+|---|---|---|
+| pose (YOLOv8n-pose, every 2nd frame) | 20.3 ms mean / 21.7 ms p95 | **7.0 ms** mean / 8.2 ms p95 |
+| hands (MediaPipe HandLandmarker, every frame) | 11.0 ms mean / 12.2 ms p95 | not attempted (see below) |
+| faces (MediaPipe FaceLandmarker, every frame) | 4.1 ms mean / 7.5 ms p95 | not attempted (see below) |
+| game + HUD + hand assignment (no vision) | 3.9 ms mean / 5.4 ms p95 | same (CPU-only) |
+
+Naively running every model every frame: **CPU ≈ 39 ms/frame (≈ 25 FPS)**, right at the ~25 FPS / p95 50 ms
+proposal; **with CUDA for pose ≈ 26 ms/frame (≈ 38 FPS)**, comfortably inside it. A live `--solo` run (webcam,
+CUDA pose) played a full round with no crash and no perceptible lag, consistent with these numbers.
+MediaPipe's GPU delegate needs extra OpenGL/EGL setup this project does not attempt, so hands/faces are CPU
+(XNNPACK) only here; CUDA only speeds up the YOLO pose stage.
+
+### Known risks and what is still unvalidated
+
+- **Face detection shrinks away on a full 1280-wide frame.** Measured directly (`hand_detection/samples/05_high_five_two_people.jpg`,
+  two real faces, ~150-200 px wide in a 1280 px frame): a raw `FaceLandmarker.detect()` call on the full image
+  finds **zero** faces, even at `min_face_detection_confidence=0.1`; the same model finds the same face
+  immediately on a tight crop around it. This is a real limitation of MediaPipe's short-range face detector at
+  this face-to-frame ratio, not a bug in this integration. **`face_tracking_final.py`'s own unmodified recovery
+  mechanism already handles it**: `FaceTracker.step()`'s half-frame search (`SEARCH_EVERY=3`) found the frontal
+  face within 3 calls (~100 ms at 30 FPS) in the same test photo (`test_face_module.py::test_face_tracker_recovers_a_frontal_face_from_a_real_group_photo`).
+  The **profile-oriented** face in the same photo was never confirmed across 12 calls - a known weak point of
+  this face detector for non-frontal faces, not something to chase further here. Expect a similar few-frame
+  delay before glasses first appear in real play, and no glasses at all while a player is turned away from the
+  camera (a controlled failure, not a crash - satisfies T1-07, just not with instant recognition).
+- **Only solo mode has been run against a real camera.** A live `--solo` session (one real person vs. the bot)
+  played cleanly through a full round. **Two real simultaneous players, crossing, and re-entry after leaving
+  the frame have not been tested live** - only exercised through `test_player_tracker.py`'s synthetic
+  identity-manager scenarios.
+- **The One Euro filter's actual jitter reduction is unmeasured on live video.** `HandSlot`'s filtering is
+  reused unmodified and is exercised by `test_face_module.py`/`test_vision.py` with synthetic landmarks, but no
+  raw-vs-filtered jitter number from `--log`'s CSV has been computed from a real session yet (T2-04's metric).
 - **Re-ID (`appearance=True`) is unvalidated.** `test_player_tracker.py` passes unchanged with it off (the
-  default); nobody has checked it against real two-player footage yet. Turn it on deliberately, re-run the
-  tests, and watch for regressions before relying on it.
-- **Sunglasses asset licence.** `sunglasses_picture.jpg` / `sunglasses_picture2.jpg` are copied into
-  `game/assets/`; confirm where they came from before this goes into a graded deliverable.
+  default); nobody has checked it against real two-player footage, crossing or otherwise.
+- **MediaPipe on Python 3.14 generally.** This machine runs 3.14 with MediaPipe 1.0.1 (the exact pin in
+  `hand_detection/requirements.txt`) - confirm this installs on the actual demo laptop before relying on it.
+- **Sunglasses asset licence.** `sunglasses_picture.jpg` / `sunglasses_picture2.jpg` (now canonically in
+  `../face_tracking/`, next to the code that loads them) - confirm their provenance before this goes into a
+  graded deliverable.
 
 ## To decide as a team
 
