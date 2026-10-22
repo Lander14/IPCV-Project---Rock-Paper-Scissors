@@ -68,7 +68,9 @@ Legend: ✅ done · 🟡 partial · ❌ missing. Evidence = test name, a measure
 | T3-01–07 | ✅ | `test_player_tracker.py` (10 tests): new id, left=P1, re-entry, spectator ignored, crossing with kept ids, solo always P1 |
 | T3-08, 09 | 🟡 | `distance_m` is a rough shoulder-width estimate, not calibrated; no explicit uncertainty reporting |
 | T3-10 | 🟡 | synthetic tests only; **live two-person crossing/occlusion/re-entry not yet run** (checklist §3) |
-| T4-01–09 | ✅ | `test_game_logic.py` (23 tests, pre-existing, untouched) |
+| T4-01, 04–09 | ✅ | `test_game_logic.py`, pre-existing |
+| T4-02 ≥ 2 actions per player | ✅ | 3 spell gestures (rock / paper / scissors) + lane choice + potion |
+| T4-03 interaction | ✅ | spells clashing/countering in the lanes (player-player) + potion with a real object (player-object, **camera trigger pending**) |
 | T5-02, 03, 04, 07 | ✅ | `play_camera.py` runs all five tasks together; `benchmark.py --real` identifies hands (~11 ms) and faces (~4–8 ms) as the costliest stages |
 | T5-05 | 🟡 | `FaceModule.update()` does **not** clamp `dt` the way `face_tracking_final.main()` does — first-frame/stall `dt` is unbounded (checklist #3) |
 | T5-06, 08 | 🟡 | now measured on real people (see still-photo table below): **~14 FPS worst case**, under the ~25 FPS target; not yet improved |
@@ -110,9 +112,15 @@ text overlaps the player panels' HP bars.
 None of these are fixed yet — by request, so the whole team sees the real current state before any more
 changes land.
 
-## Decisions needed
+## Decisions taken
 
-- **Shield / potion gesture**, or keep them keyboard-only.
+- **Shield dropped (22 Oct 2026).** Actions are now rock / paper / scissors spells + lane choice +
+  potion. Defence against a spell is only countering it in the same lane.
+
+## Decisions needed (pending)
+
+- **Potion kept** - decide how the camera triggers it (e.g. a real bottle / cup at the mouth: YOLO COCO
+  bottle / cup near the pose head, or a dedicated gesture) and who builds it; keyboard G / N until then.
 - **Sunglasses image licence** — confirm provenance before the graded submission.
 - **Demo laptop + its Python/MediaPipe environment** — confirmed only on this dev machine (Python 3.14,
   MediaPipe 1.0.1) so far.
@@ -127,6 +135,7 @@ changes land.
   read about, before prioritising the fix.
 - **T3:** pick a short real clip (or the one specified in the checklist's live-test script) to validate
   `appearance=True` against before deciding whether to turn it on.
-- **T4:** nothing blocking — confirm SHIELD/POTION stay keyboard-only for the demo.
+- **T4:** decide the potion's camera trigger (object detector vs. a dedicated gesture) and who builds
+  it — it stays keyboard-only (G / N) until then.
 - **T5:** decide the performance target for the *real* demo scenario (how many people, how many hands
   visible at once) so issue #4 has a concrete number to hit.
