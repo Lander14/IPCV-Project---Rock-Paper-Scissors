@@ -71,9 +71,29 @@ Legend: ✅ done · 🟡 partial · ❌ missing. Evidence = test name, a measure
 | T4-01–09 | ✅ | `test_game_logic.py` (23 tests, pre-existing, untouched) |
 | T5-02, 03, 04, 07 | ✅ | `play_camera.py` runs all five tasks together; `benchmark.py --real` identifies hands (~11 ms) and faces (~4–8 ms) as the costliest stages |
 | T5-05 | 🟡 | `FaceModule.update()` does **not** clamp `dt` the way `face_tracking_final.main()` does — first-frame/stall `dt` is unbounded (checklist #3) |
-| T5-06, 08 | 🟡 | measured **solo** only (one person); two-person + 3 hand numbers not yet collected (see Risks below) |
+| T5-06, 08 | 🟡 | now measured on real people (see still-photo table below): **~14 FPS worst case**, under the ~25 FPS target; not yet improved |
 | T5-09 | ❌ | **not yet tested with two real simultaneous players** — only solo, live |
 | T5-10 | ✅ | pause on lost presence, no gesture → no action, graceful degradation when a model/asset is missing |
+
+## Still-photo check (samples 03, 05, 06; 1280×720 letterboxed, 20 settle frames, CUDA pose)
+
+![contact sheet](img/camera_mode_samples.jpg)
+
+| Sample | pose ms (mean/p95) | hands ms | faces ms | drawing ms | glasses shown? |
+|---|---|---|---|---|---|
+| 03 waving | 8.6 / 9.1 | 19.3 / 20.3 | 34.5 / 36.5 | 2.0 / 2.5 | yes |
+| 05 high-five (2 people) | 9.0 / 9.9 | 18.8 / 20.0 | 19.7 / 31.7 | 1.3 / 1.6 | no (see issue 2) |
+| 06 handshake (2 people) | 8.8 / 9.5 | 18.6 / 19.7 | 25.7 / 42.6 | 1.4 / 1.7 | no (see issue 2) |
+| pose, sample 05, **CPU** (vs. 9.0 ms CUDA above) | 22.4 / 26.6 | — | — | — | — |
+
+**This confirms checklist issue #4, worse than our earlier estimate**: these are *real* people in frame
+(the solo-only ~4 ms faces / ~11 ms hands numbers in `game/README.md` were measured against an **empty**
+background, where both models return a fast negative). Worst case here (sample 06): 9.5 + 19.7 + 42.6 +
+1.7 ≈ **73 ms/frame ≈ 14 FPS** with CUDA pose already applied — well under the ~25 FPS target. Faces are
+now clearly the single biggest cost, not hands.
+
+The contact sheet's top-right and bottom-left panels also show checklist issue 5 live: the LOBBY title
+text overlaps the player panels' HP bars.
 
 ## Known issues (full detail: `Fusion v2 - Checklist.md`)
 
@@ -82,8 +102,9 @@ Legend: ✅ done · 🟡 partial · ❌ missing. Evidence = test name, a measure
 2. **Small/partial faces on the full frame are missed** (e.g. `samples/04_arms_raised_stage.jpg`) — the
    short-range detector needs a size-appropriate crop, not just the half-frame fallback already in place.
 3. `FaceModule.update()`'s `dt` isn't clamped — a stall could hand the Kalman filter an unbounded `dt`.
-4. **Two-person, multi-hand performance is unmeasured** — the README's ~38 FPS was solo-only; a rough
-   estimate with more people/hands in frame could be closer to ~20 FPS.
+4. **Two-person performance is measured now, and it's below target** — ~14 FPS worst case on real
+   people (see the still-photo table above), vs. the README's ~38 FPS solo/empty-background number.
+   Faces are the biggest single cost (up to 42.6 ms p95).
 5. The over-head HP label overlaps the LOBBY title.
 
 None of these are fixed yet — by request, so the whole team sees the real current state before any more
