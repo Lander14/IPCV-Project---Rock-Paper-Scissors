@@ -1,0 +1,6 @@
+﻿ultralytics
+mediapipe
+opencv-contrib-python
+sounddevice
+polars
+lap
