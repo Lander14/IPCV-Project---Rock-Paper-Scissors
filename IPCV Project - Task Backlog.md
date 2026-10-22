@@ -38,8 +38,8 @@
 | **Who wins** | Earth grounds Lightning · Lightning electrifies Water · Water erodes Earth (same as rock–paper–scissors) |
 | **Round** | countdown 3-2-1 → both cast **at the same moment** → winner deals damage → effects → next round |
 | **Life** | 100 HP each; a win deals 25; a tie deals nothing (or both 10) |
-| **2nd action** | **Shield**: both palms open towards the camera (or arms crossed). Blocks the next hit; one use per 3 rounds. Satisfies "≥ 2 distinguishable actions per player" (T4-02). |
-| **Optional extra** | **Potion**: hold a cup or bottle to your mouth → +15 HP, once per game (real-world object interaction, T4). |
+| **2nd action** | **Shield**: both palms open towards the camera (or arms crossed). Blocks the next hit; one use per 3 rounds. Satisfies "≥ 2 distinguishable actions per player" (T4-02). — **Dropped (team decision, 22 Oct 2026).** Countering in the same lane is the only defence now. |
+| **Optional extra** | **Potion**: hold a cup or bottle to your mouth → +15 HP, once per game (real-world object interaction, T4). — **Kept, camera trigger pending** (object detector or a dedicated gesture); keyboard-only (P1 G, P2 N) until then. |
 | **End** | a player at 0 HP loses; a "WINNER" screen; restart with both hands up |
 
 > [!tip] Why a countdown?
@@ -92,7 +92,7 @@ frame   = scene.render(frame, players, events)     # T5 -> image shown on screen
 - [ ] **Smoothing** of the landmarks (EMA or One Euro filter) — less jitter without too much delay (T2-04, T2-07).
 - [ ] **Stable gesture**: report a gesture only if it is the same for N frames in a row (e.g. 5) (T2-04, T4-04).
 - [ ] **Uncertain hands**: low confidence or a lost hand → gesture `None`, never a random spell (T2-05, T2-06).
-- [ ] **Shield gesture** (both palms open) or other 2nd action, agreed with T4.
+- [x] ~~**Shield gesture** (both palms open) or other 2nd action, agreed with T4.~~ **Dropped (team decision, 22 Oct 2026).**
 
 **W3**
 - [ ] **Evaluation** (report T2 section):
@@ -145,7 +145,7 @@ frame   = scene.render(frame, players, events)     # T5 -> image shown on screen
 
 **W2**
 - [ ] Connect to the real gestures: read each player's **stable** gesture at the end of the countdown (T4-04, T4-05).
-- [ ] **≥ 2 actions per player**: spell + shield (+ potion if possible) (T4-02, T4-03).
+- [x] **≥ 2 actions per player**: spell + lane choice + potion (T4-02, T4-03). (Shield dropped, team decision, 22 Oct 2026; potion kept, camera trigger pending.)
 - [ ] **Cooldowns** and rules for simultaneous / conflicting actions (T4-05, T4-09).
 - [ ] HP / mana updated **per player ID** (T4-06).
 
@@ -176,7 +176,7 @@ frame   = scene.render(frame, players, events)     # T5 -> image shown on screen
 ## 5 · Deliverables
 
 ### Peer-review video — due Sun 1 Nov (DEL-1)
-- [ ] **Script of the 60 s**, about 10 s per task: calibration → round with spells → shield → crossing (T3) → face effects close up → scene reacting → winner.
+- [ ] **Script of the 60 s**, about 10 s per task: calibration → round with spells → crossing (T3) → face effects close up → scene reacting → winner. (Shield step removed - dropped, team decision, 22 Oct 2026.)
 - [ ] Record in **one take**: no cuts, no speed-up; webcam image and game output both visible.
 - [ ] Check: MP4, ≤ 60 s, ≤ 100 MB. One member submits on Canvas.
 

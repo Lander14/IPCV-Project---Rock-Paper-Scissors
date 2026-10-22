@@ -1,12 +1,13 @@
 # Rock-paper-scissors duel · game mechanics (T4)
 
 A **real-time** rock–paper–scissors fight in **rounds**, with **three lanes** between the two players.
-Everything is drawn **on the camera image** (augmented reality): lanes, flying rocks / paper / scissors, shields, HP.
+Everything is drawn **on the camera image** (augmented reality): lanes, flying rocks / paper / scissors, HP.
 This folder holds the rules, the round logic and the on-screen feedback, **without any image processing**.
 It runs today with the keyboard on top of the webcam picture; the hand / player tracking later replaces the keyboard
 without changes to the game code.
 
-`simulated_game.mp4` shows one scripted match (62 s) on a real picture of a room.
+`simulated_game.mp4` shows one scripted match (60 s, regenerated 22 Oct 2026 after the shield was dropped) on a
+real picture of a room.
 
 ---
 
@@ -18,15 +19,15 @@ without changes to the game code.
 | **Lanes** | three horizontal lanes between the players (top, middle, bottom). **The height of your casting hand chooses the lane.** |
 | **Casting** | a gesture held for 4 frames launches it into your lane; it travels **slowly** (~3.5 s) to the other side |
 | **Spells meet** | in the **same lane**: Paper wraps Rock · Scissors cut Paper · Rock smashes Scissors. The winner goes on, the loser is destroyed; equal spells destroy each other. Spells in **different lanes** pass each other. |
-| **Hit** | a spell that reaches the end of its lane hits the opponent (−25 HP; 4 hits = K.O.) |
-| **Shield** | hold the shield gesture with your hand at a lane: it blocks that lane, at most 2 s, then 4 s to recharge |
+| **Hit** | a spell that reaches the end of its lane, uncountered, hits the opponent (−25 HP; 4 hits = K.O.) |
 | **Potion** | +20 HP, once per round (a real bottle or cup at the mouth, if we detect it) |
 | **No spamming** | a spell costs 30 mana (100 max, +15 per second); 0.8 s between two spells; holding a gesture casts once: change the gesture to cast again |
 | **Rounds** | "ROUND 1 · 3-2-1 · FIGHT!" → fight until K.O. (or 90 s: more HP wins) → **best of 3** wins the match |
 | **Start / restart** | both players hold an open palm for 1 s |
 | **Player lost** | out of view > 0.4 s → **PAUSE**, spells freeze in their lanes → back → 3-2-1 → the fight continues |
 
-So you play **in time** (answer a spell before it arrives) and **in space** (put your counter or your shield in the right lane).
+So you play **in time** (answer a spell before it arrives) and **in space** (put your counter in the right
+lane). There is no shield (dropped, 22 Oct 2026 team decision) - countering in the same lane is the only defence.
 
 ---
 
@@ -54,12 +55,12 @@ stateDiagram-v2
 | Req. | How |
 |---|---|
 | T4-01 mappings | gesture → spell (`GESTURE_TO_ACTION`), **hand height → lane**; open palm = "ready" in the lobby, PAPER in a fight |
-| T4-02 ≥ 2 actions | 3 spells, choice of lane, shield, potion |
-| T4-03 interaction | spells fight each other in the lanes (player–player); potion with a real object (player–object) |
+| T4-02 ≥ 2 actions | 3 spell gestures (rock / paper / scissors) + lane choice + potion |
+| T4-03 interaction | spells clashing/countering in the lanes (player–player); potion with a real object (player–object, camera trigger pending) |
 | T4-04 no repeated actions | only a **change** of stable gesture is a command; cooldown; gestures held during a countdown do not fire |
-| T4-05 thresholds / confirmation | 4 equal frames; mana; cooldown; shield duration and recharge — all in `Config` |
+| T4-05 thresholds / confirmation | 4 equal frames; mana; cooldown — all in `Config` |
 | T4-06 per player | all state in `players[id]` |
-| T4-07 feedback | ring on each casting hand with the recognised gesture and the cooldown, spells in the lanes, shields, HIT / BLOCKED / counter texts, a text feed of what happened |
+| T4-07 feedback | ring on each casting hand with the recognised gesture and the cooldown, spells in the lanes, HIT / counter texts, a text feed of what happened |
 | T4-08 alignment | spells start at the caster's hand, in the lane of the hand, and end at the opponent's position (T3) |
 | T4-09 simultaneous | spells meet in the lanes (counter / clash); deterministic every frame |
 | T5-10 failures | player lost → pause with frozen fight; unknown gesture or missing module → no action, never a random spell |
@@ -71,7 +72,7 @@ stateDiagram-v2
 Needs `opencv-python` and `numpy` (the game logic itself needs nothing).
 
 ```bash
-python test_game_logic.py           # 23 tests: lanes, counters, shields, spam, mana, pause, rounds, bot, ...
+python test_game_logic.py           # 23 tests: lanes, counters, spam, mana, pause, rounds, bot, ...
 python play_keyboard.py             # keyboard game on the webcam picture (--no-camera: plain background)
 python play_keyboard.py --solo      # single player: you (left) against the computer (right)
 python play_keyboard.py --solo --level hard     # easy | normal | hard
@@ -84,14 +85,14 @@ python play_camera.py --every 3 --imgsz 384 --face-every 2   # a slower laptop
 python play_camera.py --log session.csv               # per-frame hand metrics (task2_hands.py's own CSV columns)
 ```
 
-Keyboard: **P1** A rock · S paper · D scissors · F shield · G potion · Q / W / E lane ·
-**P2** J · K · L · H · N · U / I / O · 1 / 2 = player leaves / comes back.
+Keyboard: **P1** A rock · S paper · D scissors · G potion · Q / W / E lane ·
+**P2** J · K · L · N · U / I / O · 1 / 2 = player leaves / comes back.
 In keyboard mode the players are virtual (thin outlines at fixed places); with tracking the real players are used.
 
 | File | What |
 |---|---|
 | `game_logic.py` | rules, lanes, phases, per-player state. **No OpenCV.** |
-| `hud.py` | everything drawn on the camera image (lanes, rock / paper / scissors with glow, shields, rings, bars, texts) |
+| `hud.py` | everything drawn on the camera image (lanes, rock / paper / scissors with glow, rings, bars, texts) |
 | `play_keyboard.py` | keyboard version on the webcam picture; `--solo` = against the computer |
 | `bot.py` | the computer opponent of the single-player mode |
 | `simulate.py` | plays a fixed script and saves a video |
@@ -110,16 +111,21 @@ In keyboard mode the players are virtual (thin outlines at fixed places); with t
 ### Single-player mode (`--solo`)
 
 The computer plays player 2 (shown as **CPU**). It uses **the same input as a person** — every frame a gesture and a
-hand lane — so it obeys the same rules (stable frames, change the gesture to cast again, cooldown, mana, shield
-recharge). It sees the spells coming at it and, after a human-like reaction time, answers with the winning spell in
-the same lane or raises a shield just before the spell arrives; it attacks at random moments in random lanes and
-drinks its potion when it is hurt. Measured over 5 games per level (a player casting a random spell every 2.4 s):
+hand lane — so it obeys the same rules (stable frames, change the gesture to cast again, cooldown, mana). It sees
+the spells coming at it and, after a human-like reaction time, answers with the winning spell in the same lane
+(its only defence now - the shield was dropped, 22 Oct 2026 team decision); it attacks at random moments in random
+lanes and drinks its potion when it is hurt. Re-measured after the shield's removal, 5 games per level (a player
+casting a random spell every 2.4 s):
 
-| Level | Spells it answers | Time to beat a player who does nothing |
+| Level | Spells it answers | Match win rate |
 |---|---|---|
-| easy | 38 % | 46 s |
-| normal | 70 % | 38 s |
-| hard | 76 % | 31 s |
+| easy | 31 % | 3 / 5 |
+| normal | 57 % | 5 / 5 |
+| hard | 66 % | 5 / 5 |
+
+Lower "spells it answers" than before the shield was dropped (was 38/70/76 %) - expected: countering needs the
+spell to still be far enough away when the bot reacts, a strictly tighter window than shield's "block in time
+*or* counter" used to allow. Win rate is barely affected, since the bot's own attacks are unchanged.
 
 With the tracking plugged in it works the same way: player 1 comes from the camera, player 2 from `Bot.act()`.
 
@@ -196,7 +202,7 @@ while True:
     frame, t_ms = camera.read()                       # mirrored webcam picture, t_ms = frame time
     players = tracker.update(frame)                   # T3: {id: player}, with T2's gesture per player
     inputs = {pid: PlayerInput(present=p.status == "ok",
-                               gesture=p.gesture,     # "ROCK" | "PAPER" | "SCISSORS" | "SHIELD" | "POTION" | None
+                               gesture=p.gesture,     # "ROCK" | "PAPER" | "SCISSORS" | "POTION" | None
                                hand_xy=p.hand_xy,     # pixels: the casting hand (its height = the lane)
                                body_xy=p.face_xy)     # pixels: head or torso, where the lanes end
               for pid, p in players.items()}
@@ -208,7 +214,7 @@ while True:
 
 - **Gesture names**: `ROCK`, `PAPER`, `SCISSORS` (also lower case). The names of the first hand script (`FIRE`, `WATER`, `LIGHTNING`) are still accepted. Anything else = no action.
 - **Lane heights** are fixed on the screen (`Config.lanes`, now 36 %, 54 %, 72 % of the height) and drawn, so players see where to hold the hand. Adjust them to where hands are when people stand 1.5–2 m from the camera.
-- `events` tell T1 / T5 what to show: `cast`, `hit`, `blocked`, `counter`, `clash`, `shield_up`, `shield_down`, `heal`, `invalid`, `ko`, `phase`, `tick`, `aim`. Example for the scene: on `hit` → shake or flash the side of the player who was hit.
+- `events` tell T1 / T5 what to show: `cast`, `hit`, `counter`, `clash`, `heal`, `invalid`, `ko`, `phase`, `tick`, `aim`. Example for the scene: on `hit` → shake or flash the side of the player who was hit.
 - `game.snapshot()["spells"]` gives every spell's lane and position each frame.
 
 ---
@@ -330,7 +336,8 @@ MediaPipe's GPU delegate needs extra OpenGL/EGL setup this project does not atte
 
 ## To decide as a team
 
-- [ ] **Shield gesture**: e.g. **both** palms open, or a "stop" hand. T2 / T3 send `"SHIELD"` for that player.
-- [ ] **Potion**: keep it (object detector for bottle / cup + mouth position) or drop it.
+- [x] **Shield**: dropped (team decision, 22 Oct 2026). Countering in the same lane is the only defence now.
+- [ ] **Potion**: kept - camera trigger still pending (object detector for bottle/cup + mouth position, or a
+     dedicated gesture - and who builds it). Keyboard-only (P1 G, P2 N) until then.
 - [ ] **Lane heights and speed** with real players in front of the demo laptop.
 - [ ] **Numbers** after a few real games: damage, mana, cooldown, speed (`Config`).
